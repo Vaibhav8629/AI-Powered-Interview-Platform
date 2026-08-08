@@ -4,7 +4,9 @@ const cors = require("cors");
 const connectDB = require('./config/db');
 
 const app = express();
-const router = require("./routes/authRoutes");
+const authenticationRoutes = require("./routes/authRoutes");
+const interviewRoute = require("./routes/interviewRoutes");
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -18,7 +20,8 @@ app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
-app.use("/api/auth", router);
+app.use("/api/auth", authenticationRoutes);
+app.use("/api/", interviewRoute);
 
 // Start server
 app.listen(PORT, () => {
