@@ -77,6 +77,11 @@ const interviewSchema = new mongoose.Schema(
       type: String,
       default: "created",
     },
+
+    completedAt: {
+      type: Date,
+      default: null,
+    }
   },
 
   {

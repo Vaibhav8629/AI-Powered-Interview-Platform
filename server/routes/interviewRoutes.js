@@ -24,5 +24,19 @@ router.post(
   authMiddleware,
   interviewController.submitAnswer,
 );
-
+router.post(
+  "/interview/:interviewId/next-question",
+  authMiddleware,
+  interviewController.getNextQuestion,
+);
+router.post(
+    "/interview/:interviewId/complete",
+    authMiddleware,
+    interviewController.completeInterview
+);
+router.get(
+    "/interview/:interviewId/result",
+    authMiddleware,
+    interviewController.getInterviewResult
+);
 module.exports = router;

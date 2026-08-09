@@ -188,9 +188,177 @@ Do not be overly harsh.
     }
 };
 
+const getNextQuestion = async (req, res) => {
+    try {
+        const interview = await Interview.findOne({
+            _id: req.params.interviewId,
+            user: req.user.userId
+        });
+
+        if (!interview) {
+            return res.status(404).json({
+                message: "Interview not found"
+            });
+        }
+
+        // Check if all questions are completed
+        if (interview.currentQuestion >= interview.questions.length - 1) {
+            return res.status(400).json({
+                message: "No more questions available"
+            });
+        }
+
+        // Move to next question
+        interview.currentQuestion += 1;
+
+        await interview.save();
+
+        const question =
+            interview.questions[interview.currentQuestion];
+
+        return res.status(200).json({
+            message: "Next question fetched",
+            question
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Error fetching next question"
+        });
+    }
+};
+
+const completeInterview = async (req, res) => {
+    try {
+        const interview = await Interview.findOne({
+            _id: req.params.interviewId,
+            user: req.user.userId
+        });
+
+        if (!interview) {
+            return res.status(404).json({
+                message: "Interview not found"
+            });
+        }
+
+        if (interview.status === "completed") {
+            return res.status(400).json({
+                message: "Interview already completed"
+            });
+        }
+
+        // Make sure all questions have been answered
+        const unansweredQuestion = interview.questions.find(
+            q => !q.answer || q.answer.trim() === ""
+        );
+
+        if (unansweredQuestion) {
+            return res.status(400).json({
+                message: "All questions must be answered first"
+            });
+        }
+
+        interview.status = "completed";
+        interview.completedAt = new Date();
+
+        await interview.save();
+
+        return res.status(200).json({
+            message: "Interview completed successfully",
+            interviewId: interview._id
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Error completing interview"
+        });
+    }
+};
+
+const getInterviewResult = async (req, res) => {
+    try {
+        const interview = await Interview.findOne({
+            _id: req.params.interviewId,
+            user: req.user.userId
+        });
+
+        if (!interview) {
+            return res.status(404).json({
+                message: "Interview not found"
+            });
+        }
+
+        if (interview.status !== "completed") {
+            return res.status(400).json({
+                message: "Interview is not completed yet"
+            });
+        }
+
+        const questions = interview.questions;
+
+        const totalQuestions = questions.length;
+
+        const totalScore = questions.reduce(
+            (sum, question) => sum + (question.score || 0),
+            0
+        );
+
+        const maxScore = totalQuestions * 10;
+
+        const averageScore =
+            totalQuestions > 0
+                ? totalScore / totalQuestions
+                : 0;
+
+        const percentage =
+            maxScore > 0
+                ? (totalScore / maxScore) * 100
+                : 0;
+
+        return res.status(200).json({
+            interviewId: interview._id,
+            role: interview.role,
+            difficulty: interview.difficulty,
+
+            totalQuestions,
+
+            totalScore,
+            maxScore,
+
+            averageScore: Number(averageScore.toFixed(2)),
+
+            percentage: Number(percentage.toFixed(2)),
+
+            completedAt: interview.completedAt,
+
+            questions: questions.map(q => ({
+                questionId: q._id,
+                question: q.question,
+                answer: q.answer,
+                feedback: q.feedback,
+                score: q.score
+            }))
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        return res.status(500).json({
+            message: "Error fetching interview result"
+        });
+    }
+};
+
 module.exports = {
   createInterview,
   getUserInterviews,
   getInterviewById,
   submitAnswer,
+  getNextQuestion,
+  completeInterview,
+  getInterviewResult,
 };
