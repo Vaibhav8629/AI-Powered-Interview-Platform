@@ -1,0 +1,23 @@
+/* ScannerBackground.css
+   Fixed, full-viewport background layer. Sits behind all page content,
+   never intercepts pointer events, and clips its animated canvas. */
+
+.scanner-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background: #030907; /* deep near-black green-tinted base so the glow reads as premium, not neon-on-black */
+}
+
+.scanner-background__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
