@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
 import {
   Menu, X, Zap, Mic, BarChart3, Brain, BrainCircuit, Briefcase, Activity, CheckCircle2, Sparkles, ArrowRight,
@@ -56,11 +56,11 @@ const WORKFLOW = [
 ];
 
 const CAPABILITIES = [
-  { title: 'Adaptive questions', description: 'Questions dynamically adjust based on your answers and performance.', icon: BrainCircuit },
-  { title: 'Role-based interviews', description: 'Practice interviews specifically designed for your target job role.', icon: Briefcase },
-  { title: 'Real-time evaluation', description: 'Get evaluated on communication, technical knowledge, and answer quality.', icon: Activity },
-  { title: 'Performance insights', description: 'Track your progress and identify exactly where you need to improve.', icon: BarChart3 },
-  { title: 'Voice-native', description: 'Natural spoken interviews with live transcription, no typing required.', icon: Mic },
+  { title: 'Adaptive questions', description: 'Questions dynamically adjust based on your answers and performance.', icon: BrainCircuit, image: '/Adaptive_question.png' },
+  { title: 'Role-based interviews', description: 'Practice interviews specifically designed for your target job role.', icon: Briefcase, image: '/Role_based_interviews.png' },
+  { title: 'Real-time evaluation', description: 'Get evaluated on communication, technical knowledge, and answer quality.', icon: Activity, image: '/Real_time_evaluation.png' },
+  { title: 'Performance insights', description: 'Track your progress and identify exactly where you need to improve.', icon: BarChart3, image: '/Performance_insights.png' },
+  { title: 'Voice-native', description: 'Natural spoken interviews with live transcription, no typing required.', icon: Mic, image: '/Voice_native.png' },
 ];
 
 const LOGOS = ['Nova Labs', 'Quantify', 'Northbeam', 'Fintra', 'Corelab', 'Meridian', 'Hearthstack', 'Palladium'];
@@ -79,6 +79,7 @@ const FAQS = [
 ];
 
 export default function LandingPage() {
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [visibleSections, setVisibleSections] = useState({});
@@ -252,9 +253,10 @@ export default function LandingPage() {
           </div>
 
           <div className="nav-buttons" style={styles.navButtons}>
-            <Link to="/login" className="btn-login">Log in</Link>
-            <button type="button" className="btn-cta">
-              Start interview <ArrowRight size={14} style={{ marginLeft: 6, verticalAlign: '-2px' }} aria-hidden="true" />
+            <button type="button" className="btn-login" onClick={() => navigate('/login')}>Log in</button>
+            <button type="button" className="btn-cta btn-icon-button" onClick={() => navigate('/interview/setup')}>
+              <span>Start interview</span>
+              <ArrowRight size={14} className="btn-arrow" aria-hidden="true" />
             </button>
           </div>
 
@@ -278,8 +280,8 @@ export default function LandingPage() {
               </a>
             ))}
             <div className="mobile-menu-buttons">
-              <Link to="/login" className="btn-login">Log in</Link>
-              <button type="button" className="btn-cta">Start interview</button>
+              <button type="button" className="btn-login" onClick={() => navigate('/login')}>Log in</button>
+              <button type="button" className="btn-cta" onClick={() => navigate('/interview/setup')}>Start interview</button>
             </div>
           </div>
         )}
@@ -315,8 +317,9 @@ export default function LandingPage() {
         </p>
 
         <div style={styles.heroCTAContainer}>
-          <button type="button" className="btn-primary" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic}>
-            Start interview <ArrowRight size={16} style={{ marginLeft: 8, verticalAlign: '-3px' }} aria-hidden="true" />
+          <button type="button" className="btn-primary btn-icon-button" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic} onClick={() => navigate('/interview/setup')}>
+            <span>Start interview</span>
+            <ArrowRight size={16} className="btn-arrow" aria-hidden="true" />
           </button>
           <button type="button" className="btn-secondary" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic}>
             View history
@@ -429,8 +432,8 @@ export default function LandingPage() {
               <div key={capability.title} className="capability-card" style={{ transitionDelay: `${idx * 80}ms` }}>
                 <div className="capability-card-inner">
                   <div className="capability-card-face capability-card-front">
-                    <div className="capability-card-icon">
-                      <Icon size={28} aria-hidden="true" />
+                    <div className="capability-card-media">
+                      <img src={capability.image} alt={capability.title} className="capability-card-image" />
                     </div>
                     <h3 className="capability-card-title">{capability.title}</h3>
                   </div>
@@ -602,8 +605,9 @@ export default function LandingPage() {
           Stop guessing how you&rsquo;ll perform. Practice with AI, learn from every answer, and
           walk into your next interview prepared.
         </p>
-        <button type="button" className="btn-primary btn-primary-lg" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic}>
-          Start practicing <ArrowRight size={18} style={{ marginLeft: 8, verticalAlign: '-3px' }} aria-hidden="true" />
+        <button type="button" className="btn-primary btn-primary-lg btn-icon-button" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic} onClick={() => navigate('/interview/setup')}>
+          <span>Start practicing</span>
+          <ArrowRight size={18} className="btn-arrow" aria-hidden="true" />
         </button>
       </section>
 
@@ -716,7 +720,7 @@ export default function LandingPage() {
         .nav-link:hover { color: var(--ink); }
         .nav-link:hover::after { width: 100%; }
 
-        .btn-login { background: transparent; border: 1px solid var(--line); padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--ink); transition: all 0.2s; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-login { background: transparent; border: 1px solid var(--line); padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--ink); transition: all 0.2s; }
         .btn-login:hover { background: var(--g-50); border-color: var(--g-300); }
         .btn-cta { background: linear-gradient(135deg, var(--g-500), var(--g-700)); border: none; padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: white; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 14px rgba(16,185,129,0.3); }
         .btn-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(16,185,129,0.4); }
@@ -728,6 +732,18 @@ export default function LandingPage() {
         }
         .btn-primary:hover { box-shadow: 0 14px 36px rgba(16,185,129,0.45); }
         .btn-primary-lg { padding: 18px 42px; font-size: 17px; }
+        .btn-icon-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          line-height: 1;
+        }
+        .btn-arrow {
+          flex-shrink: 0;
+          display: inline-block;
+          vertical-align: middle;
+        }
         .btn-secondary {
           background: white; border: 1px solid var(--line); padding: 15px 34px; border-radius: 10px; cursor: pointer;
           font-size: 16px; font-weight: 700; color: var(--ink); box-shadow: 0 2px 10px rgba(5,46,28,0.06); transition: transform 0.15s ease, border-color 0.2s;
@@ -742,7 +758,7 @@ export default function LandingPage() {
           .mobile-menu { display: flex !important; flex-direction: column; padding: 16px 24px 24px; gap: 4px; border-top: 1px solid var(--line); background: rgba(255,255,255,0.98); }
           .mobile-menu-link { padding: 12px 0; text-decoration: none; color: var(--ink); font-size: 15px; font-weight: 500; border-bottom: 1px solid var(--g-50); }
           .mobile-menu-buttons { display: flex; gap: 12px; margin-top: 16px; }
-          .mobile-menu-buttons button, .mobile-menu-buttons a { flex: 1; }
+          .mobile-menu-buttons button { flex: 1; }
         }
 
         /* ---------- Backgrounds ---------- */
@@ -860,7 +876,7 @@ export default function LandingPage() {
           width: 100%;
           min-height: 280px;
           transform-style: preserve-3d;
-          transition: transform 0.82s cubic-bezier(0.22, 1, 0.36, 1);
+          transition: transform 1.45s cubic-bezier(0.22, 1, 0.36, 1);
           will-change: transform;
         }
         .capabilities-grid > .capability-card:nth-child(1) { grid-column: 1 / span 2; }
@@ -880,7 +896,7 @@ export default function LandingPage() {
           flex-direction: column;
           justify-content: center;
           align-items: center;
-          padding: 32px;
+          padding: 28px 24px 24px;
           text-align: center;
           backface-visibility: hidden;
           border: 1px solid rgba(16,185,129,0.12);
@@ -888,6 +904,21 @@ export default function LandingPage() {
         .capability-card-front {
           background: white;
           box-shadow: 0 24px 70px rgba(16,185,129,0.08);
+        }
+        .capability-card-media {
+          width: 100%;
+          height: 68%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 14px;
+        }
+        .capability-card-image {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          object-position: center;
         }
         .capability-card-back {
           background: linear-gradient(180deg, var(--g-600), var(--g-500));
