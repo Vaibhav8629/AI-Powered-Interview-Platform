@@ -42,6 +42,9 @@ export default function InterviewScreen() {
   const [answers, setAnswers] = useState([]);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
+  const [interviewerVideo] = useState(() =>
+    Math.random() < 0.5 ? "/male-ai.mp4" : "/female-ai.mp4"
+  );
 
   const interviewQuestions = Array.isArray(interview?.questions)
     ? interview.questions.map((question, index) => normalizeQuestion(question, index))
@@ -216,6 +219,13 @@ export default function InterviewScreen() {
         }
 
         .interview-left img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+
+        .interviewer-video {
           width: 100%;
           height: 100%;
           object-fit: cover;
@@ -526,9 +536,17 @@ export default function InterviewScreen() {
         }
       `}</style>
 
-      {/* LEFT: full-bleed interviewer image, no card, no padding */}
+      {/* LEFT: full-bleed interviewer video, no card, no padding */}
       <div className="interview-left">
-        <img src="/interviewer-image.jpg" alt="Interviewer" />
+        <video
+          src={interviewerVideo}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          className="interviewer-video"
+        />
       </div>
 
       {/* RIGHT: independent workspace */}
