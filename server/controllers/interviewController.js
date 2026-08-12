@@ -5,6 +5,103 @@ const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
 });
 
+const fallbackQuestionSets = {
+    "Frontend Developer": [
+        "Explain how you would optimize a React component that re-renders frequently.",
+        "How do you manage state in a medium-sized frontend application?",
+        "Describe your approach to responsive design and accessibility.",
+    ],
+    "Backend Developer": [
+        "How do you design a REST API for scalability and maintainability?",
+        "Explain how you would secure a Node.js and Express application.",
+        "How do you handle validation and error handling in backend services?",
+    ],
+    "Full Stack Developer": [
+        "Walk through how data flows from a React UI to a MongoDB database.",
+        "How do you keep frontend and backend contracts in sync?",
+        "Describe a full stack debugging process for a production issue.",
+    ],
+};
+
+const buildFallbackQuestions = ({ role, topics, numberOfQuestions }) => {
+    const roleQuestions = fallbackQuestionSets[role] || [
+        "Tell me about a project that best represents your experience for this role.",
+        "How do you approach solving unfamiliar technical problems?",
+        "Describe a time you had to learn or adapt quickly in a project.",
+    ];
+
+    const topicQuestions = Array.isArray(topics) && topics.length > 0
+        ? topics.map((topic) => `Explain your understanding of ${topic} and where you have used it.`)
+        : [];
+
+    const combined = [...roleQuestions, ...topicQuestions];
+    const questions = [];
+
+    for (let index = 0; index < numberOfQuestions; index += 1) {
+        questions.push({
+            question: combined[index % combined.length] || `Question ${index + 1}`,
+            answer: "",
+            feedback: "",
+            score: null,
+        });
+    }
+
+    return questions;
+};
+
+const generateQuestions = async ({ role, experience, interviewType, difficulty, topics, numberOfQuestions }) => {
+    const prompt = `
+Generate ${numberOfQuestions} interview questions for a ${role} candidate.
+Experience level: ${experience}
+Interview type: ${interviewType}
+Difficulty: ${difficulty}
+Topics: ${(topics || []).join(", ")}
+
+Return concise questions only.
+`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "object",
+                    properties: {
+                        questions: {
+                            type: "array",
+                            items: {
+                                type: "object",
+                                properties: {
+                                    question: { type: "string" },
+                                },
+                                required: ["question"],
+                            },
+                        },
+                    },
+                    required: ["questions"],
+                },
+            },
+        });
+
+        const parsed = JSON.parse(response.text);
+
+        if (Array.isArray(parsed?.questions) && parsed.questions.length > 0) {
+            return parsed.questions.slice(0, numberOfQuestions).map((item) => ({
+                question: item.question,
+                answer: "",
+                feedback: "",
+                score: null,
+            }));
+        }
+    } catch (error) {
+        console.warn("Question generation fell back to templates:", error.message);
+    }
+
+    return buildFallbackQuestions({ role, topics, numberOfQuestions });
+};
+
 const createInterview = async (req, res) => {
   const userData = req.user;
   try {
@@ -16,9 +113,33 @@ const createInterview = async (req, res) => {
       topics,
       numberOfQuestions,
       duration,
-      questions,
       status,
     } = req.body;
+
+        if (
+            !role ||
+            !experience ||
+            !interviewType ||
+            !difficulty ||
+            !Array.isArray(topics) ||
+            topics.length === 0 ||
+            !numberOfQuestions ||
+            !duration
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "All interview configuration fields are required.",
+            });
+        }
+
+        const questions = await generateQuestions({
+            role,
+            experience,
+            interviewType,
+            difficulty,
+            topics,
+            numberOfQuestions,
+        });
 
     const interview = await Interview.create({
       user: userData.userId,
@@ -33,9 +154,17 @@ const createInterview = async (req, res) => {
       status,
     });
 
-    res.status(200).json("Interview successfully created");
+        res.status(201).json({
+            success: true,
+            interviewId: interview._id,
+            interview,
+        });
   } catch (error) {
     console.log(error);
+        res.status(500).json({
+            success: false,
+            message: "Error creating interview",
+        });
   }
 };
 
@@ -55,16 +184,25 @@ const getUserInterviews = async (req, res) => {
 const getInterviewById = async (req, res) => {
   try {
     const interviewId = req.params.id;
-    const interview = await Interview.findById(interviewId);
+        const interview = await Interview.findById(interviewId);
+
     if (!interview) {
       return res.status(404).json({
         success: false,
         message: "Interview not found",
       });
     }
+
+        if (String(interview.user) !== String(req.user.userId)) {
+            return res.status(403).json({
+                success: false,
+                message: "You do not have access to this interview",
+            });
+        }
+
     res.status(200).json({
       success: true,
-      data: interview,
+            interview,
     });
   } catch (error) {
     console.error(error);

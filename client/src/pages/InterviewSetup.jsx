@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
@@ -13,6 +14,7 @@ import {
   Loader2,
 } from "lucide-react";
 import ScannerBackground from '../components/ScannerBackground';
+import api, { getApiErrorMessage } from "../services/api";
 
 /* ------------------------------------------------------------------ */
 /*  Static config                                                     */
@@ -605,31 +607,40 @@ function StepFive({ data, update }) {
 /* ------------------------------------------------------------------ */
 
 export default function InterviewSetup() {
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
   const [data, setData] = useState(emptyForm);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
+  const getAuthToken = () =>
+    localStorage.getItem("token") || localStorage.getItem("authToken");
+
   const update = (patch) => {
     setData((prev) => ({ ...prev, ...patch }));
     setErrors({});
   };
 
-  const validate = () => {
+  const validate = (finalStep = false) => {
     const e = {};
-    if (step === 1) {
+    const validateStepOne = finalStep || step === 1;
+    const validateStepTwo = finalStep || step === 2;
+    const validateStepThree = finalStep || step === 3;
+    const validateStepFour = finalStep || step === 4;
+
+    if (validateStepOne) {
       if (!data.role) e.role = "Please select a role";
       if (!data.experience) e.experience = "Please select your experience level";
     }
-    if (step === 2) {
+    if (validateStepTwo) {
       if (!data.interviewType) e.interviewType = "Please select an interview type";
       if (!data.difficulty) e.difficulty = "Please select a difficulty";
     }
-    if (step === 3) {
+    if (validateStepThree) {
       if (data.topics.length === 0) e.topics = "Select at least one topic";
     }
-    if (step === 4) {
+    if (validateStepFour) {
       if (data.numberOfQuestions < 5 || data.numberOfQuestions > 15)
         e.numberOfQuestions = "Number of questions must be between 5 and 15";
       if (data.duration < 10 || data.duration > 90)
@@ -640,13 +651,55 @@ export default function InterviewSetup() {
   };
 
   const goNext = () => {
-    if (!validate()) return;
+    if (step === 5) {
+      if (!validate(true)) return;
+    } else if (!validate()) {
+      return;
+    }
+
     if (step < 5) {
       setDirection(1);
       setStep((s) => s + 1);
     } else {
-      setSubmitting(true);
-      setTimeout(() => setSubmitting(false), 1400); // hook up to real API call
+      const startInterview = async () => {
+        setSubmitting(true);
+        setErrors((prev) => ({ ...prev, submit: "" }));
+
+        try {
+          const token = getAuthToken();
+
+          if (!token) {
+            throw new Error("You need to be logged in to start an interview.");
+          }
+
+          const response = await api.post("/api/create-interview", {
+            role: data.role,
+            experience: data.experience,
+            interviewType: data.interviewType,
+            difficulty: data.difficulty,
+            topics: data.topics,
+            numberOfQuestions: data.numberOfQuestions,
+            duration: data.duration,
+          });
+
+          const interviewId = response?.data?.interviewId || response?.data?.interview?._id;
+
+          if (!interviewId) {
+            throw new Error("Interview was created, but no interview id was returned.");
+          }
+
+          navigate(`/interview/${interviewId}`);
+        } catch (error) {
+          setErrors((prev) => ({
+            ...prev,
+            submit: getApiErrorMessage(error, "Unable to start interview."),
+          }));
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      startInterview();
     }
   };
 
@@ -815,6 +868,11 @@ export default function InterviewSetup() {
               )}
             </button>
           </div>
+          {errors.submit ? (
+            <p className="mt-3 text-right text-[13px] font-medium text-rose-600">
+              {errors.submit}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

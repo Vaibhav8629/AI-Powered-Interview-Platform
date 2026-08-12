@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
 import {
   Menu, X, Zap, Mic, BarChart3, Brain, BrainCircuit, Briefcase, Activity, CheckCircle2, Sparkles, ArrowRight,
@@ -251,7 +252,7 @@ export default function LandingPage() {
           </div>
 
           <div className="nav-buttons" style={styles.navButtons}>
-            <button type="button" className="btn-login">Log in</button>
+            <Link to="/login" className="btn-login">Log in</Link>
             <button type="button" className="btn-cta">
               Start interview <ArrowRight size={14} style={{ marginLeft: 6, verticalAlign: '-2px' }} aria-hidden="true" />
             </button>
@@ -277,7 +278,7 @@ export default function LandingPage() {
               </a>
             ))}
             <div className="mobile-menu-buttons">
-              <button type="button" className="btn-login">Log in</button>
+              <Link to="/login" className="btn-login">Log in</Link>
               <button type="button" className="btn-cta">Start interview</button>
             </div>
           </div>
@@ -715,7 +716,7 @@ export default function LandingPage() {
         .nav-link:hover { color: var(--ink); }
         .nav-link:hover::after { width: 100%; }
 
-        .btn-login { background: transparent; border: 1px solid var(--line); padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--ink); transition: all 0.2s; }
+        .btn-login { background: transparent; border: 1px solid var(--line); padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--ink); transition: all 0.2s; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
         .btn-login:hover { background: var(--g-50); border-color: var(--g-300); }
         .btn-cta { background: linear-gradient(135deg, var(--g-500), var(--g-700)); border: none; padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: white; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 14px rgba(16,185,129,0.3); }
         .btn-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(16,185,129,0.4); }
@@ -741,7 +742,7 @@ export default function LandingPage() {
           .mobile-menu { display: flex !important; flex-direction: column; padding: 16px 24px 24px; gap: 4px; border-top: 1px solid var(--line); background: rgba(255,255,255,0.98); }
           .mobile-menu-link { padding: 12px 0; text-decoration: none; color: var(--ink); font-size: 15px; font-weight: 500; border-bottom: 1px solid var(--g-50); }
           .mobile-menu-buttons { display: flex; gap: 12px; margin-top: 16px; }
-          .mobile-menu-buttons button { flex: 1; }
+          .mobile-menu-buttons button, .mobile-menu-buttons a { flex: 1; }
         }
 
         /* ---------- Backgrounds ---------- */

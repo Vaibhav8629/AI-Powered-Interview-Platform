@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
+import api, { getApiErrorMessage } from "../services/api";
 
 /**
  * AI Smart Interview — Full-screen Interview Screen
@@ -14,41 +15,6 @@ import { useParams } from "react-router-dom";
 // questionTime (seconds) can later come from interview config/API per question.
 // Falls back to 120s (2:00) if a question doesn't specify one.
 const DEFAULT_QUESTION_TIME = 120;
-
-const QUESTIONS = [
-  {
-    id: 1,
-    text: "Tell me about a recent project you built and what your role was.",
-    answer: "",
-    questionTime: 120,
-  },
-  {
-    id: 2,
-    text: "What challenges did you face while building the calculator application, and how did you overcome them?",
-    answer:
-      "there are many challenges I am face in to build my calculator application mostly Logic to build calculator",
-    questionTime: 120,
-  },
-  {
-    id: 3,
-    text: "How do you approach debugging a tricky issue in production?",
-    answer: "",
-    questionTime: 90,
-  },
-  {
-    id: 4,
-    text: "Describe a time you had to learn a new technology quickly.",
-    answer: "",
-    questionTime: 120,
-  },
-  {
-    id: 5,
-    text: "Where do you see areas for improvement in your current skill set?",
-    answer: "",
-    questionTime: 120,
-  },
-];
-
 function formatTime(totalSeconds) {
   const safe = Math.max(0, totalSeconds);
   const mins = Math.floor(safe / 60);
@@ -56,21 +22,34 @@ function formatTime(totalSeconds) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+function normalizeQuestion(question, index) {
+  return {
+    id: question?._id || index + 1,
+    text: question?.question || question?.text || `Question ${index + 1}`,
+    answer: question?.answer || "",
+    questionTime: question?.questionTime || DEFAULT_QUESTION_TIME,
+    feedback: question?.feedback || "",
+    score: question?.score ?? null,
+  };
+}
+
 export default function InterviewScreen() {
   const { id } = useParams();
   const [interview, setInterview] = useState(null);
   const [loadingInterview, setLoadingInterview] = useState(Boolean(id));
   const [interviewError, setInterviewError] = useState("");
-  const [currentIndex, setCurrentIndex] = useState(1); // Question 2 of 5, 0-indexed
-  const [answers, setAnswers] = useState(() =>
-    QUESTIONS.map((q) => q.answer)
-  );
-  const [feedback] = useState(
-    "Answer lacks clarity and detail; focus on specific challenges."
-  );
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState([]);
+  const [currentAnswer, setCurrentAnswer] = useState("");
+  const [submittingAnswer, setSubmittingAnswer] = useState(false);
 
-  const currentQuestion = QUESTIONS[currentIndex];
-  const allottedTime = currentQuestion.questionTime || DEFAULT_QUESTION_TIME;
+  const interviewQuestions = Array.isArray(interview?.questions)
+    ? interview.questions.map((question, index) => normalizeQuestion(question, index))
+    : [];
+
+  const currentQuestion = interviewQuestions[currentIndex] || null;
+  const allottedTime = currentQuestion?.questionTime || DEFAULT_QUESTION_TIME;
+  const isLast = currentIndex === Math.max(interviewQuestions.length - 1, 0);
 
   const [secondsLeft, setSecondsLeft] = useState(allottedTime);
   const intervalRef = useRef(null);
@@ -105,6 +84,7 @@ export default function InterviewScreen() {
   }, [secondsLeft]);
 
   const handleAnswerChange = (value) => {
+    setCurrentAnswer(value);
     setAnswers((prev) => {
       const next = [...prev];
       next[currentIndex] = value;
@@ -112,14 +92,36 @@ export default function InterviewScreen() {
     });
   };
 
-  const handleNextQuestion = useCallback(() => {
-    setCurrentIndex((prev) => {
-      const next = prev + 1;
-      return next < QUESTIONS.length ? next : prev; // stay on last question if at end
-    });
-  }, []);
+  const handleNextQuestion = useCallback(async () => {
+    if (!currentQuestion || submittingAnswer) {
+      return;
+    }
 
-  const isLast = currentIndex === QUESTIONS.length - 1;
+    setSubmittingAnswer(true);
+    setInterviewError("");
+
+    try {
+      if (currentAnswer.trim()) {
+        await api.post(`/api/interview/${id}/answer`, {
+          questionId: currentQuestion.id,
+          answer: currentAnswer,
+        });
+      }
+
+      if (isLast) {
+        await api.post(`/api/interview/${id}/complete`);
+        setInterview((prev) => (prev ? { ...prev, status: "completed" } : prev));
+        return;
+      }
+
+      await api.post(`/api/interview/${id}/next-question`);
+      setCurrentIndex((prev) => Math.min(prev + 1, interviewQuestions.length - 1));
+    } catch (error) {
+      setInterviewError(getApiErrorMessage(error, "Unable to submit answer."));
+    } finally {
+      setSubmittingAnswer(false);
+    }
+  }, [currentAnswer, currentQuestion, id, interviewQuestions.length, isLast, submittingAnswer]);
 
   // Urgency styling thresholds
   const urgency =
@@ -143,20 +145,28 @@ export default function InterviewScreen() {
       setInterviewError("");
 
       try {
-        const data = await getInterview(id);
+        const response = await api.get(`/api/interview/${id}`);
+        const data = response?.data?.interview || response?.data?.data || response?.data || null;
 
         if (!active) {
           return;
         }
 
         setInterview(data);
+        const questions = Array.isArray(data?.questions)
+          ? data.questions.map((question, index) => normalizeQuestion(question, index))
+          : [];
+        const nextIndex = Math.min(Number(data?.currentQuestion || 0), Math.max(questions.length - 1, 0));
+        setCurrentIndex(nextIndex);
+        setAnswers(questions.map((question) => question.answer || ""));
+        setCurrentAnswer(questions[nextIndex]?.answer || "");
       } catch (error) {
         if (!active) {
           return;
         }
 
         setInterview(null);
-        setInterviewError("Unable to load interview details.");
+        setInterviewError(getApiErrorMessage(error, "Unable to load interview details."));
       } finally {
         if (active) {
           setLoadingInterview(false);
@@ -170,6 +180,10 @@ export default function InterviewScreen() {
       active = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    setCurrentAnswer(answers[currentIndex] || "");
+  }, [answers, currentIndex]);
 
   const interviewTopics = Array.isArray(interview?.topics) ? interview.topics : [];
 
@@ -534,6 +548,9 @@ export default function InterviewScreen() {
                 <div className="interview-meta">
                   {interview?.experience && <span>{interview.experience} Experience</span>}
                   {interview?.interviewType && <span>• {interview.interviewType}</span>}
+                  {typeof interview?.numberOfQuestions === "number" && (
+                    <span>• {interview.numberOfQuestions} questions</span>
+                  )}
                 </div>
 
                 {interview?.difficulty && (
@@ -572,33 +589,36 @@ export default function InterviewScreen() {
             </div>
 
             <p className="status-question-count">
-              Question <span>{currentIndex + 1}</span> / {QUESTIONS.length}
+              Question <span>{currentIndex + 1}</span> / {interviewQuestions.length}
             </p>
           </div>
         </div>
 
         <div className="question-card">
           <p className="question-of">
-            Question {currentIndex + 1} of {QUESTIONS.length}
+            Question {currentIndex + 1} of {interviewQuestions.length || 0}
           </p>
-          <p className="question-text">{currentQuestion.text}</p>
+          <p className="question-text">{currentQuestion?.text || "No question available."}</p>
         </div>
 
         <textarea
           className="answer-area"
-          value={answers[currentIndex]}
+          value={currentAnswer}
           onChange={(e) => handleAnswerChange(e.target.value)}
           placeholder="Type your answer here..."
+          disabled={loadingInterview || submittingAnswer || !currentQuestion}
         />
 
         <div className="feedback-card">
-          <p className="feedback-text">{feedback}</p>
+          <p className="feedback-text">
+            {currentQuestion?.feedback || "Your answer will be evaluated after submission."}
+          </p>
           <button
             className="next-question-btn"
             onClick={handleNextQuestion}
-            disabled={isLast}
+            disabled={loadingInterview || submittingAnswer || !currentQuestion}
           >
-            {isLast ? "Last Question" : "Next Question →"}
+            {submittingAnswer ? "Saving..." : isLast ? "Submit" : "Next Question →"}
           </button>
         </div>
       </div>
