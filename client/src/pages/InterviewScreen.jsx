@@ -25,7 +25,7 @@ function formatTime(totalSeconds) {
 function normalizeQuestion(question, index) {
   return {
     id: question?._id || index + 1,
-    text: question?.question || question?.text || `Question ${index + 1}`,
+    text: question?.question || question?.text || "",
     answer: question?.answer || "",
     questionTime: question?.questionTime || DEFAULT_QUESTION_TIME,
     feedback: question?.feedback || "",
@@ -42,20 +42,140 @@ export default function InterviewScreen() {
   const [answers, setAnswers] = useState([]);
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [interviewerVideo] = useState(() =>
     Math.random() < 0.5 ? "/male-ai.mp4" : "/female-ai.mp4"
   );
+  const [speechVoices, setSpeechVoices] = useState([]);
 
   const interviewQuestions = Array.isArray(interview?.questions)
     ? interview.questions.map((question, index) => normalizeQuestion(question, index))
     : [];
 
   const currentQuestion = interviewQuestions[currentIndex] || null;
+  const currentQuestionText = currentQuestion?.text?.trim() || "";
+  const currentQuestionSpeechKey = currentQuestion
+    ? `${currentQuestion.id}:${currentQuestionText}`
+    : "";
   const allottedTime = currentQuestion?.questionTime || DEFAULT_QUESTION_TIME;
   const isLast = currentIndex === Math.max(interviewQuestions.length - 1, 0);
 
   const [secondsLeft, setSecondsLeft] = useState(allottedTime);
   const intervalRef = useRef(null);
+  const videoRef = useRef(null);
+  const speechTokenRef = useRef(0);
+  const lastSpokenQuestionKeyRef = useRef("");
+  const mountedRef = useRef(true);
+  const speechSupported =
+    typeof window !== "undefined" &&
+    "speechSynthesis" in window &&
+    typeof window.SpeechSynthesisUtterance === "function";
+
+  const getPreferredVoice = useCallback((voices) => {
+    const englishVoices = voices.filter((voice) => /^en([_-]|$)/i.test(voice.lang || ""));
+
+    return (
+      englishVoices.find((voice) => /google|microsoft|natural|enhanced/i.test(voice.name || "")) ||
+      englishVoices[0] ||
+      null
+    );
+  }, []);
+
+  const cancelCurrentSpeech = useCallback(() => {
+    if (!speechSupported) {
+      return;
+    }
+
+    speechTokenRef.current += 1;
+
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+
+    window.speechSynthesis.cancel();
+
+    if (mountedRef.current) {
+      setIsSpeaking(false);
+    }
+  }, [speechSupported]);
+
+  const playInterviewVideo = useCallback(() => {
+    const videoElement = videoRef.current;
+
+    if (!videoElement) {
+      return;
+    }
+
+    videoElement.play().catch(() => {});
+  }, []);
+
+  const pauseInterviewVideo = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+  }, []);
+
+  const speakQuestion = useCallback(
+    (questionText, questionKey, options = {}) => {
+      const text = questionText?.trim();
+
+      if (!speechSupported || !text) {
+        return false;
+      }
+
+      const { force = false } = options;
+
+      if (!force && questionKey && lastSpokenQuestionKeyRef.current === questionKey) {
+        return false;
+      }
+
+      cancelCurrentSpeech();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      const selectedVoice = getPreferredVoice(speechVoices);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      const speechToken = speechTokenRef.current;
+      lastSpokenQuestionKeyRef.current = questionKey || text;
+
+      utterance.onstart = () => {
+        if (!mountedRef.current || speechToken !== speechTokenRef.current) {
+          return;
+        }
+
+        setIsSpeaking(true);
+        playInterviewVideo();
+      };
+
+      utterance.onend = () => {
+        if (!mountedRef.current || speechToken !== speechTokenRef.current) {
+          return;
+        }
+
+        setIsSpeaking(false);
+        pauseInterviewVideo();
+      };
+
+      utterance.onerror = () => {
+        if (!mountedRef.current || speechToken !== speechTokenRef.current) {
+          return;
+        }
+
+        setIsSpeaking(false);
+        pauseInterviewVideo();
+      };
+
+      window.speechSynthesis.speak(utterance);
+      return true;
+    },
+    [cancelCurrentSpeech, getPreferredVoice, pauseInterviewVideo, playInterviewVideo, speechVoices, speechSupported]
+  );
 
   // Reset + restart countdown whenever the active question changes.
   useEffect(() => {
@@ -85,6 +205,49 @@ export default function InterviewScreen() {
       // Time's up for this question. Extend here (e.g. auto-submit) as needed.
     }
   }, [secondsLeft]);
+
+  useEffect(() => {
+    if (!speechSupported) {
+      return undefined;
+    }
+
+    const updateVoices = () => {
+      setSpeechVoices(window.speechSynthesis.getVoices() || []);
+    };
+
+    updateVoices();
+    window.speechSynthesis.addEventListener?.("voiceschanged", updateVoices);
+
+    return () => {
+      window.speechSynthesis.removeEventListener?.("voiceschanged", updateVoices);
+    };
+  }, [speechSupported]);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+
+      if (speechSupported) {
+        window.speechSynthesis.cancel();
+      }
+
+      pauseInterviewVideo();
+    };
+  }, [pauseInterviewVideo, speechSupported]);
+
+  useEffect(() => {
+    pauseInterviewVideo();
+  }, [pauseInterviewVideo]);
+
+  useEffect(() => {
+    if (!currentQuestionText) {
+      cancelCurrentSpeech();
+      lastSpokenQuestionKeyRef.current = "";
+      return;
+    }
+
+    speakQuestion(currentQuestionText, currentQuestionSpeechKey);
+  }, [cancelCurrentSpeech, currentQuestionSpeechKey, currentQuestionText, speakQuestion]);
 
   const handleAnswerChange = (value) => {
     setCurrentAnswer(value);
@@ -431,6 +594,13 @@ export default function InterviewScreen() {
           flex-shrink: 0;
         }
 
+        .question-header-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
         .question-of {
           font-size: 12px;
           color: #9ca3af;
@@ -443,6 +613,41 @@ export default function InterviewScreen() {
           color: #111827;
           line-height: 1.5;
           margin: 0;
+        }
+
+        .read-question-btn {
+          flex-shrink: 0;
+          border: 1px solid #a7f3d0;
+          background: #ecfdf5;
+          color: #047857;
+          border-radius: 9999px;
+          padding: 8px 12px;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+          white-space: nowrap;
+        }
+
+        .read-question-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          background: #d1fae5;
+        }
+
+        .read-question-btn:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+
+        .read-question-btn.speaking {
+          background: #d1fae5;
+          border-color: #6ee7b7;
+        }
+
+        .read-question-fallback {
+          margin: 8px 0 0 0;
+          font-size: 12px;
+          color: #6b7280;
         }
 
         /* ---------- ANSWER AREA ---------- */
@@ -539,8 +744,8 @@ export default function InterviewScreen() {
       {/* LEFT: full-bleed interviewer video, no card, no padding */}
       <div className="interview-left">
         <video
+          ref={videoRef}
           src={interviewerVideo}
-          autoPlay
           muted
           loop
           playsInline
@@ -613,10 +818,29 @@ export default function InterviewScreen() {
         </div>
 
         <div className="question-card">
-          <p className="question-of">
-            Question {currentIndex + 1} of {interviewQuestions.length || 0}
-          </p>
-          <p className="question-text">{currentQuestion?.text || "No question available."}</p>
+          <div className="question-header-row">
+            <div>
+              <p className="question-of">
+                Question {currentIndex + 1} of {interviewQuestions.length || 0}
+              </p>
+              <p className="question-text">{currentQuestion?.text || "No question available."}</p>
+            </div>
+
+            {speechSupported ? (
+              <button
+                type="button"
+                className={`read-question-btn ${isSpeaking ? "speaking" : ""}`}
+                onClick={() => speakQuestion(currentQuestionText, currentQuestionSpeechKey, { force: true })}
+                disabled={loadingInterview || submittingAnswer || !currentQuestionText}
+              >
+                {isSpeaking ? "Speaking..." : "🔊 Read Question"}
+              </button>
+            ) : null}
+          </div>
+
+          {!speechSupported ? (
+            <p className="read-question-fallback">Read aloud is not available in this browser.</p>
+          ) : null}
         </div>
 
         <textarea
