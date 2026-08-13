@@ -43,10 +43,18 @@ export default function InterviewScreen() {
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [submittingAnswer, setSubmittingAnswer] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechRecognitionAvailable, setSpeechRecognitionAvailable] = useState(false);
   const [interviewerVideo] = useState(() =>
     Math.random() < 0.5 ? "/male-ai.mp4" : "/female-ai.mp4"
   );
   const [speechVoices, setSpeechVoices] = useState([]);
+
+  const currentAnswerRef = useRef("");
+  const recognitionRef = useRef(null);
+  const finalSpeechRef = useRef("");
+  const interimSpeechRef = useRef("");
+  const speechBaseRef = useRef("");
 
   const interviewQuestions = Array.isArray(interview?.questions)
     ? interview.questions.map((question, index) => normalizeQuestion(question, index))
@@ -63,6 +71,9 @@ export default function InterviewScreen() {
   const [secondsLeft, setSecondsLeft] = useState(allottedTime);
   const intervalRef = useRef(null);
   const videoRef = useRef(null);
+  const utteranceRef = useRef(null);
+  const maleVoiceRef = useRef(null);
+  const femaleVoiceRef = useRef(null);
   const speechTokenRef = useRef(0);
   const lastSpokenQuestionKeyRef = useRef("");
   const mountedRef = useRef(true);
@@ -70,6 +81,9 @@ export default function InterviewScreen() {
     typeof window !== "undefined" &&
     "speechSynthesis" in window &&
     typeof window.SpeechSynthesisUtterance === "function";
+  const speechRecognitionSupported =
+    typeof window !== "undefined" &&
+    Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   const getPreferredVoice = useCallback((voices) => {
     const englishVoices = voices.filter((voice) => /^en([_-]|$)/i.test(voice.lang || ""));
@@ -81,6 +95,36 @@ export default function InterviewScreen() {
     );
   }, []);
 
+  const getGenderFromVideo = useCallback((videoPath) => {
+    if (!videoPath) return "male";
+    const path = videoPath.toLowerCase();
+    if (path.includes("female")) return "female";
+    return "male";
+  }, []);
+
+  const findBestVoiceForGender = useCallback((voices, gender) => {
+    if (!Array.isArray(voices) || voices.length === 0) return null;
+
+    const kwMale = ["male", "man", "david", "john", "alex", "daniel", "matt", "michael", "mark", "robert"];
+    const kwFemale = ["female", "woman", "zira", "susan", "emily", "linda", "kathy", "amy", "kate", "sara", "sarah"];
+
+    const candidates = voices.filter((v) => /^en([_-]|$)/i.test(v.lang || ""));
+    const keywords = gender === "female" ? kwFemale : kwMale;
+
+    // Prefer voices whose name or URI contains a gender/name hint
+    for (const k of keywords) {
+      const match = candidates.find((v) => (v.name || "").toLowerCase().includes(k) || (v.voiceURI || "").toLowerCase().includes(k));
+      if (match) return match;
+    }
+
+    // Fallback to voices explicitly containing 'female'/'male'
+    const explicit = candidates.find((v) => (v.name || "").toLowerCase().includes(gender) || (v.voiceURI || "").toLowerCase().includes(gender));
+    if (explicit) return explicit;
+
+    // Last resort: return preferred voice
+    return getPreferredVoice(voices);
+  }, [getPreferredVoice]);
+
   const cancelCurrentSpeech = useCallback(() => {
     if (!speechSupported) {
       return;
@@ -88,9 +132,20 @@ export default function InterviewScreen() {
 
     speechTokenRef.current += 1;
 
-    if (videoRef.current) {
-      videoRef.current.pause();
+    // Stop any in-flight utterance handlers and clear ref
+    try {
+      if (utteranceRef.current) {
+        utteranceRef.current.onstart = null;
+        utteranceRef.current.onend = null;
+        utteranceRef.current.onerror = null;
+        utteranceRef.current = null;
+      }
+    } catch (e) {
+      // ignore
     }
+
+    // Pause and reset video when cancelling speech
+    pauseInterviewVideo(true);
 
     window.speechSynthesis.cancel();
 
@@ -99,19 +154,64 @@ export default function InterviewScreen() {
     }
   }, [speechSupported]);
 
-  const playInterviewVideo = useCallback(() => {
+  const playInterviewVideo = useCallback(async () => {
     const videoElement = videoRef.current;
 
     if (!videoElement) {
+      console.log("Video play attempted but video element missing");
       return;
     }
 
-    videoElement.play().catch(() => {});
+    try {
+      const gender = getGenderFromVideo(interviewerVideo);
+      console.log(`Playing ${interviewerVideo} (selected interviewer: ${gender})`);
+      // Ensure the video has data / can play before trying to play
+      if (videoElement.readyState < 2) {
+        await new Promise((resolve) => {
+          const handler = () => resolve();
+          videoElement.addEventListener("canplay", handler, { once: true });
+        });
+      }
+
+      console.log("Video play attempted");
+      await videoElement.play();
+      console.log("Video playing");
+    } catch (err) {
+      console.log("Video play failed:", err && (err.message || err));
+    }
   }, []);
 
-  const pauseInterviewVideo = useCallback(() => {
+  const pauseInterviewVideo = useCallback((reset = false) => {
     if (videoRef.current) {
-      videoRef.current.pause();
+      try {
+        videoRef.current.pause();
+        const gender = getGenderFromVideo(interviewerVideo);
+        console.log(`Paused ${interviewerVideo} (selected interviewer: ${gender})`);
+
+        if (reset) {
+          try {
+            // only set currentTime if metadata is available
+            if (videoRef.current.readyState > 0) {
+              videoRef.current.currentTime = 0;
+              console.log("Video reset to 0");
+            } else {
+              // wait for loadedmetadata then reset
+              const h = () => {
+                try {
+                  videoRef.current.currentTime = 0;
+                  console.log("Video reset to 0 (onloadedmetadata)");
+                } catch (e) {}
+                videoRef.current.removeEventListener("loadedmetadata", h);
+              };
+              videoRef.current.addEventListener("loadedmetadata", h);
+            }
+          } catch (e) {
+            console.log("Video reset failed:", e && (e.message || e));
+          }
+        }
+      } catch (e) {
+        console.log("Video pause failed:", e && (e.message || e));
+      }
     }
   }, []);
 
@@ -119,7 +219,10 @@ export default function InterviewScreen() {
     (questionText, questionKey, options = {}) => {
       const text = questionText?.trim();
 
+      console.log("speakQuestion called", { questionKey, textPresent: !!text, speechSupported });
+
       if (!speechSupported || !text) {
+        console.log("speakQuestion abort: no support or empty text", { speechSupported, text });
         return false;
       }
 
@@ -129,6 +232,9 @@ export default function InterviewScreen() {
         return false;
       }
 
+      // Reserve the key immediately so duplicate rapid calls won't proceed
+      lastSpokenQuestionKeyRef.current = questionKey || text;
+
       cancelCurrentSpeech();
 
       const utterance = new SpeechSynthesisUtterance(text);
@@ -136,21 +242,38 @@ export default function InterviewScreen() {
       utterance.pitch = 1;
       utterance.volume = 1;
 
-      const selectedVoice = getPreferredVoice(speechVoices);
+      // Track the current utterance so we can remove handlers if cancelled
+      utteranceRef.current = utterance;
+
+      const inferredGender = getGenderFromVideo(interviewerVideo);
+      console.log("Selected interviewer:", inferredGender);
+
+      let selectedVoice = inferredGender === "female" ? femaleVoiceRef.current : maleVoiceRef.current;
+      if (!selectedVoice) {
+        selectedVoice = findBestVoiceForGender(speechVoices, inferredGender) || getPreferredVoice(speechVoices);
+      }
+
       if (selectedVoice) {
         utterance.voice = selectedVoice;
+        console.log("Selected voice:", selectedVoice.name);
+      } else {
+        console.log("No specific gendered voice found; using default/first available");
       }
 
       const speechToken = speechTokenRef.current;
       lastSpokenQuestionKeyRef.current = questionKey || text;
 
-      utterance.onstart = () => {
+      utterance.onstart = async () => {
         if (!mountedRef.current || speechToken !== speechTokenRef.current) {
           return;
         }
 
+        console.log("TTS started");
         setIsSpeaking(true);
-        playInterviewVideo();
+        // Ensure we start the correct video for the selected interviewer
+        const gender = getGenderFromVideo(interviewerVideo);
+        console.log(`Playing ${interviewerVideo} (TTS started for ${gender})`);
+        await playInterviewVideo();
       };
 
       utterance.onend = () => {
@@ -158,20 +281,54 @@ export default function InterviewScreen() {
           return;
         }
 
+        console.log("TTS ended");
         setIsSpeaking(false);
-        pauseInterviewVideo();
+        // clear tracked utterance
+        try {
+          if (utteranceRef.current === utterance) {
+            utteranceRef.current = null;
+          }
+        } catch (e) {}
+        pauseInterviewVideo(true);
       };
 
-      utterance.onerror = () => {
+      utterance.onpause = () => {
+        if (!mountedRef.current || speechToken !== speechTokenRef.current) {
+          return;
+        }
+        console.log("TTS paused");
+        setIsSpeaking(false);
+        pauseInterviewVideo(true);
+      };
+      utterance.onerror = (ev) => {
         if (!mountedRef.current || speechToken !== speechTokenRef.current) {
           return;
         }
 
+        console.log("TTS error", ev);
         setIsSpeaking(false);
-        pauseInterviewVideo();
+        try {
+          if (utteranceRef.current === utterance) {
+            utteranceRef.current = null;
+          }
+        } catch (e) {}
+        pauseInterviewVideo(true);
       };
 
+      console.log("about to call speechSynthesis.speak");
       window.speechSynthesis.speak(utterance);
+
+      // Fallback: ensure video starts if speaking begins but `onstart` didn't fire.
+      setTimeout(() => {
+        try {
+          if (window.speechSynthesis.speaking) {
+            console.log("speechSynthesis.speaking detected fallback - starting video");
+            playInterviewVideo();
+          }
+        } catch (e) {}
+      }, 60);
+
+      console.log("speechSynthesis.speak returned");
       return true;
     },
     [cancelCurrentSpeech, getPreferredVoice, pauseInterviewVideo, playInterviewVideo, speechVoices, speechSupported]
@@ -212,7 +369,16 @@ export default function InterviewScreen() {
     }
 
     const updateVoices = () => {
-      setSpeechVoices(window.speechSynthesis.getVoices() || []);
+      const vs = window.speechSynthesis.getVoices() || [];
+      console.log("voiceschanged: found voices:", vs.map((v) => v.name));
+      setSpeechVoices(vs);
+
+      try {
+        maleVoiceRef.current = findBestVoiceForGender(vs, "male");
+        femaleVoiceRef.current = findBestVoiceForGender(vs, "female");
+        console.log("Selected male voice:", maleVoiceRef.current && maleVoiceRef.current.name);
+        console.log("Selected female voice:", femaleVoiceRef.current && femaleVoiceRef.current.name);
+      } catch (e) {}
     };
 
     updateVoices();
@@ -224,33 +390,156 @@ export default function InterviewScreen() {
   }, [speechSupported]);
 
   useEffect(() => {
+    currentAnswerRef.current = currentAnswer;
+  }, [currentAnswer]);
+
+  useEffect(() => {
+    setSpeechRecognitionAvailable(Boolean(speechRecognitionSupported));
+  }, [speechRecognitionSupported]);
+
+  useEffect(() => {
     return () => {
       mountedRef.current = false;
 
-      if (speechSupported) {
-        window.speechSynthesis.cancel();
+      // Ensure any active speech and handlers are cancelled/cleaned
+      try {
+        cancelCurrentSpeech();
+      } catch (e) {
+        if (speechSupported) {
+          window.speechSynthesis.cancel();
+        }
+      }
+
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.onresult = null;
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.log("Speech recognition cleanup error:", e);
+        }
       }
 
       pauseInterviewVideo();
     };
-  }, [pauseInterviewVideo, speechSupported]);
+  }, [cancelCurrentSpeech, pauseInterviewVideo, speechSupported]);
+
+  const stopSpeechRecognition = useCallback((resetSession = false) => {
+    const recognition = recognitionRef.current;
+
+    if (recognition) {
+      try {
+        recognition.onresult = null;
+        recognition.onend = null;
+        recognition.onerror = null;
+        recognition.stop();
+      } catch (error) {
+        console.log("Speech recognition stop error:", error);
+      }
+      recognitionRef.current = null;
+    }
+
+    if (resetSession) {
+      finalSpeechRef.current = "";
+      interimSpeechRef.current = "";
+      speechBaseRef.current = "";
+    }
+
+    setIsListening(false);
+  }, []);
+
+  const appendFinalTranscript = useCallback((existing, incoming) => {
+    const current = (existing || "").trim();
+    const next = (incoming || "").trim();
+
+    if (!next) {
+      return current;
+    }
+
+    if (!current) {
+      return next;
+    }
+
+    if (current === next || current.endsWith(next)) {
+      return current;
+    }
+
+    if (next.startsWith(current)) {
+      return next;
+    }
+
+    const currentWords = current.split(/\s+/);
+    const nextWords = next.split(/\s+/);
+
+    if (
+      nextWords.length >= currentWords.length &&
+      nextWords.slice(0, currentWords.length).join(" ") === current
+    ) {
+      return next;
+    }
+
+    if (
+      currentWords.length > nextWords.length &&
+      currentWords.slice(0, nextWords.length).join(" ") === next
+    ) {
+      return current;
+    }
+
+    return `${current} ${next}`.trim();
+  }, []);
 
   useEffect(() => {
-    pauseInterviewVideo();
+    stopSpeechRecognition(true);
+  }, [currentQuestionSpeechKey, stopSpeechRecognition]);
+
+  useEffect(() => {
+    pauseInterviewVideo(true);
   }, [pauseInterviewVideo]);
 
+  // Poll speechSynthesis.speaking to ensure video mirrors TTS state across browsers
   useEffect(() => {
+    if (!speechSupported) return undefined;
+
+    let lastSpeaking = false;
+    const interval = setInterval(() => {
+      try {
+        const speaking = !!window.speechSynthesis.speaking;
+
+        if (speaking && !lastSpeaking) {
+          lastSpeaking = true;
+          console.log("poll: TTS speaking detected -> play video");
+          playInterviewVideo();
+        } else if (!speaking && lastSpeaking) {
+          lastSpeaking = false;
+          console.log("poll: TTS stopped -> pause video");
+          pauseInterviewVideo(true);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 120);
+
+    return () => clearInterval(interval);
+  }, [speechSupported, playInterviewVideo, pauseInterviewVideo]);
+
+  useEffect(() => {
+    console.log("question-effect: currentQuestionKey=", currentQuestionSpeechKey);
+
     if (!currentQuestionText) {
+      console.log("question-effect: no question text, cancelling speech");
       cancelCurrentSpeech();
       lastSpokenQuestionKeyRef.current = "";
       return;
     }
 
+    console.log("question-effect: speaking question");
     speakQuestion(currentQuestionText, currentQuestionSpeechKey);
   }, [cancelCurrentSpeech, currentQuestionSpeechKey, currentQuestionText, speakQuestion]);
 
   const handleAnswerChange = (value) => {
     setCurrentAnswer(value);
+    currentAnswerRef.current = value;
     setAnswers((prev) => {
       const next = [...prev];
       next[currentIndex] = value;
@@ -258,11 +547,123 @@ export default function InterviewScreen() {
     });
   };
 
+  const buildSpeechAnswer = useCallback((baseValue, finalText, interimText) => {
+    const base = (baseValue || "").trim();
+    const finalSegment = (finalText || "").trim();
+    const interimSegment = (interimText || "").trim();
+    const speechText = [finalSegment, interimSegment].filter(Boolean).join(" ").trim();
+    return [base, speechText].filter(Boolean).join(" ").trim();
+  }, []);
+
+  const handleSpeechToggle = useCallback(() => {
+    if (!speechRecognitionAvailable || !speechRecognitionSupported) {
+      return;
+    }
+
+    if (recognitionRef.current) {
+      stopSpeechRecognition(true);
+      return;
+    }
+
+    const SpeechRecognitionConstructor =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionConstructor) {
+      setSpeechRecognitionAvailable(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognitionConstructor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.maxAlternatives = 1;
+
+    finalSpeechRef.current = "";
+    interimSpeechRef.current = "";
+    speechBaseRef.current = currentAnswerRef.current.trim();
+
+    recognition.onstart = () => {
+      console.log("Speech recognition started");
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      console.log("Speech result received", event.results);
+
+      let latestInterimTranscript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        const transcript = result?.[0]?.transcript?.trim();
+
+        if (!transcript) {
+          continue;
+        }
+
+        if (result.isFinal) {
+          console.log("Final transcript:", transcript);
+          finalSpeechRef.current = appendFinalTranscript(finalSpeechRef.current, transcript);
+        } else {
+          console.log("Interim transcript:", transcript);
+          latestInterimTranscript = transcript;
+        }
+      }
+
+      interimSpeechRef.current = latestInterimTranscript;
+
+      const updatedValue = buildSpeechAnswer(
+        speechBaseRef.current,
+        finalSpeechRef.current,
+        interimSpeechRef.current
+      );
+
+      setCurrentAnswer(updatedValue);
+      currentAnswerRef.current = updatedValue;
+      setAnswers((prev) => {
+        const next = [...prev];
+        next[currentIndex] = updatedValue;
+        return next;
+      });
+    };
+
+    recognition.onend = () => {
+      console.log("Speech recognition stopped");
+      setIsListening(false);
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+      }
+      interimSpeechRef.current = "";
+      speechBaseRef.current = currentAnswerRef.current.trim();
+    };
+
+    recognition.onerror = (event) => {
+      console.log("Speech recognition error:", event?.error || event);
+      setIsListening(false);
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+      }
+      interimSpeechRef.current = "";
+      speechBaseRef.current = currentAnswerRef.current.trim();
+    };
+
+    recognitionRef.current = recognition;
+
+    try {
+      recognition.start();
+    } catch (error) {
+      console.log("Speech recognition start error:", error);
+      recognitionRef.current = null;
+      setIsListening(false);
+    }
+  }, [appendFinalTranscript, buildSpeechAnswer, currentIndex, speechRecognitionAvailable, speechRecognitionSupported, stopSpeechRecognition]);
+
   const handleNextQuestion = useCallback(async () => {
     if (!currentQuestion || submittingAnswer) {
       return;
     }
 
+    stopSpeechRecognition(true);
     setSubmittingAnswer(true);
     setInterviewError("");
 
@@ -287,7 +688,7 @@ export default function InterviewScreen() {
     } finally {
       setSubmittingAnswer(false);
     }
-  }, [currentAnswer, currentQuestion, id, interviewQuestions.length, isLast, submittingAnswer]);
+  }, [currentAnswer, currentQuestion, id, interviewQuestions.length, isLast, stopSpeechRecognition, submittingAnswer]);
 
   // Urgency styling thresholds
   const urgency =
@@ -651,13 +1052,18 @@ export default function InterviewScreen() {
         }
 
         /* ---------- ANSWER AREA ---------- */
+        .answer-input-wrap {
+          position: relative;
+          width: 100%;
+        }
+
         .answer-area {
           flex: 1;
           min-height: 140px;
           background: #f3f4f6;
           border: 1px solid #e5e7eb;
           border-radius: 14px;
-          padding: 18px 20px;
+          padding: 18px 52px 18px 20px;
           font-size: 14px;
           color: #374151;
           line-height: 1.6;
@@ -669,6 +1075,49 @@ export default function InterviewScreen() {
         .answer-area:focus {
           outline: none;
           border-color: #10b981;
+        }
+
+        .mic-button {
+          position: absolute;
+          right: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          border: 1px solid #d1d5db;
+          background: #ffffff;
+          color: #374151;
+          font-size: 18px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+        }
+
+        .mic-button:hover:not(:disabled) {
+          border-color: #10b981;
+          color: #047857;
+        }
+
+        .mic-button.listening {
+          background: #fee2e2;
+          border-color: #ef4444;
+          color: #b91c1c;
+          box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+        }
+
+        .mic-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .speech-warning {
+          margin-top: 8px;
+          font-size: 12px;
+          color: #b45309;
         }
 
         /* ---------- AI FEEDBACK ---------- */
@@ -843,13 +1292,34 @@ export default function InterviewScreen() {
           ) : null}
         </div>
 
-        <textarea
-          className="answer-area"
-          value={currentAnswer}
-          onChange={(e) => handleAnswerChange(e.target.value)}
-          placeholder="Type your answer here..."
-          disabled={loadingInterview || submittingAnswer || !currentQuestion}
-        />
+        <div className="answer-input-wrap">
+          <textarea
+            className="answer-area"
+            value={currentAnswer}
+            onChange={(e) => handleAnswerChange(e.target.value)}
+            placeholder="Type your answer here..."
+            disabled={loadingInterview || submittingAnswer || !currentQuestion}
+          />
+
+          {speechRecognitionAvailable ? (
+            <button
+              type="button"
+              className={`mic-button ${isListening ? "listening" : ""}`}
+              onClick={handleSpeechToggle}
+              aria-label={isListening ? "Stop speech recognition" : "Start speech recognition"}
+              title={isListening ? "Stop microphone" : "Start microphone"}
+              disabled={loadingInterview || submittingAnswer || !currentQuestion}
+            >
+              {isListening ? "🎙️" : "🎤"}
+            </button>
+          ) : null}
+        </div>
+
+        {!speechRecognitionAvailable && (
+          <div className="speech-warning">
+            Speech recognition is not supported in this browser. Please use Chrome or Edge.
+          </div>
+        )}
 
         <div className="feedback-card">
           <p className="feedback-text">
