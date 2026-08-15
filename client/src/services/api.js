@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const BASE_API = import.meta.env.VITE_BASE_API;
+const runtimeEnv = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {};
+const BASE_API = runtimeEnv.VITE_BASE_API || process.env?.VITE_BASE_API || globalThis.__VITE_BASE_API__;
 
 if (!BASE_API) {
   throw new Error("VITE_BASE_API is not configured.");
@@ -34,6 +35,17 @@ export function getApiErrorMessage(error, fallbackMessage = "Something went wron
     error?.message ||
     fallbackMessage
   );
+}
+
+export async function submitInterviewAndFeedback(apiClient = api, interviewId) {
+  const completionResponse = await apiClient.post(`/api/interview/${interviewId}/complete`);
+  const feedbackResponse = await apiClient.post(`/api/interview/${interviewId}/feedback`);
+
+  return {
+    ...completionResponse?.data,
+    feedback: feedbackResponse?.data?.feedback ?? feedbackResponse?.data ?? null,
+    interviewId: completionResponse?.data?.interviewId ?? interviewId,
+  };
 }
 
 // ── Credit / user helpers ──────────────────────────────────────────────────

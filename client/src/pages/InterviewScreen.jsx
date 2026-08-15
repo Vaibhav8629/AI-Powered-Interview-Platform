@@ -837,7 +837,10 @@ export default function InterviewScreen() {
       }
 
       if (isLast) {
-        await api.post(`/api/interview/${id}/complete`);
+        const completionResponse = await api.post(`/api/interview/${id}/complete`);
+        const feedbackResponse = await api.post(`/api/interview/${id}/feedback`);
+        const finalInterviewId = completionResponse?.data?.interviewId || id;
+        const generatedFeedback = feedbackResponse?.data?.feedback ?? feedbackResponse?.data ?? null;
 
         // Stop monitoring first so no stale events get counted
         stopMonitoring();
@@ -851,6 +854,7 @@ export default function InterviewScreen() {
         }
 
         setInterview((prev) => (prev ? { ...prev, status: "completed" } : prev));
+        navigate(`/feedback/${finalInterviewId}`, { state: { feedback: generatedFeedback } });
         return;
       }
 
@@ -1975,7 +1979,7 @@ export default function InterviewScreen() {
             onClick={handleNextQuestion}
             disabled={loadingInterview || submittingAnswer || !currentQuestion}
           >
-            {submittingAnswer ? "Saving..." : isLast ? "Submit" : "Next Question →"}
+            {submittingAnswer ? (isLast ? "Completing..." : "Saving...") : isLast ? "Submit Interview" : "Next Question →"}
           </button>
         </div>
       </div>
