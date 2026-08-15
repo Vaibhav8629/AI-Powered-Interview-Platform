@@ -402,6 +402,156 @@ const completeInterview = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TERMINATE INTERVIEW DUE TO CHEATING
+// ─────────────────────────────────────────────────────────────────────────────
+
+const terminateCheating = async (req, res) => {
+  try {
+    const interview = await Interview.findOne({
+      _id: req.params.interviewId,
+      user: req.user.userId,
+    });
+
+    if (!interview) {
+      return res.status(404).json({ success: false, message: "Interview not found" });
+    }
+
+    // Already terminated or completed — idempotent, just acknowledge
+    if (interview.status === "terminated" || interview.status === "completed") {
+      return res.status(200).json({
+        success: true,
+        message: "Interview already finalised",
+        status: interview.status,
+      });
+    }
+
+    const {
+      tabSwitchCount = 0,
+      fullscreenExitCount = 0,
+      copyAttemptCount = 0,
+      pasteAttemptCount = 0,
+      cutAttemptCount = 0,
+      violations = [],
+      terminationReason = "UNKNOWN",
+    } = req.body;
+
+    const toSafeInt = (val) => Math.max(0, Math.floor(Number(val) || 0));
+
+    const ALLOWED_TYPES = new Set([
+      "TAB_SWITCH",
+      "FULLSCREEN_EXIT",
+      "COPY_ATTEMPT",
+      "PASTE_ATTEMPT",
+      "CUT_ATTEMPT",
+    ]);
+
+    const sanitizedViolations = Array.isArray(violations)
+      ? violations
+          .filter((v) => v && ALLOWED_TYPES.has(v.type) && v.timestamp)
+          .map((v) => ({ type: v.type, timestamp: new Date(v.timestamp) }))
+          .slice(0, 500)
+      : [];
+
+    const now = new Date();
+
+    interview.status = "terminated";
+    interview.antiCheating = {
+      tabSwitchCount:      toSafeInt(tabSwitchCount),
+      fullscreenExitCount: toSafeInt(fullscreenExitCount),
+      copyAttemptCount:    toSafeInt(copyAttemptCount),
+      pasteAttemptCount:   toSafeInt(pasteAttemptCount),
+      cutAttemptCount:     toSafeInt(cutAttemptCount),
+      violations:          sanitizedViolations,
+      terminationReason:   String(terminationReason),
+      terminatedAt:        now,
+      submittedAt:         now,
+    };
+
+    await interview.save();
+
+    console.log(`Interview ${interview._id} terminated for cheating — reason: ${terminationReason}`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Interview terminated due to cheating",
+      terminationReason,
+    });
+  } catch (error) {
+    console.error("terminateCheating error:", error);
+    return res.status(500).json({ success: false, message: "Error terminating interview" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SAVE ANTI-CHEATING SUMMARY
+// ─────────────────────────────────────────────────────────────────────────────
+
+const saveAntiCheating = async (req, res) => {
+  try {
+    const interview = await Interview.findOne({
+      _id: req.params.interviewId,
+      user: req.user.userId,
+    });
+
+    if (!interview) {
+      return res.status(404).json({ success: false, message: "Interview not found" });
+    }
+
+    const {
+      tabSwitchCount = 0,
+      fullscreenExitCount = 0,
+      copyAttemptCount = 0,
+      pasteAttemptCount = 0,
+      cutAttemptCount = 0,
+      violations = [],
+    } = req.body;
+
+    // Validate and sanitize counts — reject negative numbers or non-integers
+    const toSafeInt = (val) => Math.max(0, Math.floor(Number(val) || 0));
+
+    // Normalize violation entries — keep only known types and valid timestamps
+    const ALLOWED_TYPES = new Set([
+      "TAB_SWITCH",
+      "FULLSCREEN_EXIT",
+      "COPY_ATTEMPT",
+      "PASTE_ATTEMPT",
+      "CUT_ATTEMPT",
+    ]);
+
+    const sanitizedViolations = Array.isArray(violations)
+      ? violations
+          .filter((v) => v && ALLOWED_TYPES.has(v.type) && v.timestamp)
+          .map((v) => ({
+            type: v.type,
+            timestamp: new Date(v.timestamp),
+          }))
+          .slice(0, 500) // hard cap — prevents abuse
+      : [];
+
+    interview.antiCheating = {
+      tabSwitchCount:    toSafeInt(tabSwitchCount),
+      fullscreenExitCount: toSafeInt(fullscreenExitCount),
+      copyAttemptCount:  toSafeInt(copyAttemptCount),
+      pasteAttemptCount: toSafeInt(pasteAttemptCount),
+      cutAttemptCount:   toSafeInt(cutAttemptCount),
+      violations:        sanitizedViolations,
+      submittedAt:       new Date(),
+    };
+
+    await interview.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Anti-cheating summary saved",
+      antiCheating: interview.antiCheating,
+    });
+  } catch (error) {
+    console.error("saveAntiCheating error:", error);
+    return res.status(500).json({ success: false, message: "Error saving anti-cheating data" });
+  }
+};
+
 const getInterviewResult = async (req, res) => {
   try {
     const interview = await Interview.findOne({
@@ -456,4 +606,6 @@ module.exports = {
   getNextQuestion,
   completeInterview,
   getInterviewResult,
+  saveAntiCheating,
+  terminateCheating,
 };

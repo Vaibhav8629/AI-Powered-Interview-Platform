@@ -39,4 +39,14 @@ router.get(
     authMiddleware,
     interviewController.getInterviewResult
 );
+router.post(
+    "/interview/:interviewId/anti-cheating",
+    authMiddleware,
+    interviewController.saveAntiCheating
+);
+router.post(
+    "/interview/:interviewId/terminate-cheating",
+    authMiddleware,
+    interviewController.terminateCheating
+);
 module.exports = router;

@@ -81,7 +81,26 @@ const interviewSchema = new mongoose.Schema(
     completedAt: {
       type: Date,
       default: null,
-    }
+    },
+
+    // ── Anti-cheating ──────────────────────────────────────────────────────
+    antiCheating: {
+      tabSwitchCount:      { type: Number, default: 0 },
+      fullscreenExitCount: { type: Number, default: 0 },
+      copyAttemptCount:    { type: Number, default: 0 },
+      pasteAttemptCount:   { type: Number, default: 0 },
+      cutAttemptCount:     { type: Number, default: 0 },
+      violations: [
+        {
+          type:      { type: String, required: true },
+          timestamp: { type: Date,   required: true },
+          _id:       false,
+        },
+      ],
+      terminationReason: { type: String, default: null }, // e.g. "COPY_ATTEMPT"
+      terminatedAt:      { type: Date,   default: null },
+      submittedAt:       { type: Date,   default: null },
+    },
   },
 
   {

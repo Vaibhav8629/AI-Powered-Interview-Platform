@@ -68,4 +68,25 @@ export async function fetchMe() {
   return data; // { user }
 }
 
+/**
+ * Submit the anti-cheating summary at the end of an interview.
+ * @param {string} interviewId
+ * @param {{ tabSwitchCount, fullscreenExitCount, copyAttemptCount, pasteAttemptCount, cutAttemptCount, violations }} summary
+ */
+export async function submitAntiCheating(interviewId, summary) {
+  const { data } = await api.post(`/api/interview/${interviewId}/anti-cheating`, summary);
+  return data;
+}
+
+/**
+ * Terminate an interview due to cheating.
+ * Saves the anti-cheating summary and sets status to "terminated".
+ * @param {string} interviewId
+ * @param {{ tabSwitchCount, fullscreenExitCount, copyAttemptCount, pasteAttemptCount, cutAttemptCount, violations, terminationReason }} payload
+ */
+export async function terminateForCheating(interviewId, payload) {
+  const { data } = await api.post(`/api/interview/${interviewId}/terminate-cheating`, payload);
+  return data;
+}
+
 export default api;
