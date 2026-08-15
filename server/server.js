@@ -1,14 +1,11 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 const connectDB = require("./config/db");
 
 const app = express();
-const authenticationRoutes = require("./routes/authRoutes");
-const interviewRoute = require("./routes/interviewRoutes");
 
-// Middleware
+// ── CORS ───────────────────────────────────────────────────────────────────
 const allowedOrigins = [process.env.CLIENT_URL, "http://localhost:5173"].filter(Boolean);
 
 const corsOptions = {
@@ -17,7 +14,6 @@ const corsOptions = {
       callback(null, true);
       return;
     }
-
     callback(new Error("Not allowed by CORS"));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -26,21 +22,29 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options("/*splat", cors(corsOptions));
+
+// ── Stripe webhook — must receive raw body BEFORE express.json() ───────────
+app.use("/api/payment/webhook", express.raw({ type: "application/json" }));
+
+// ── JSON body parser for all other routes ─────────────────────────────────
 app.use(express.json());
+
+// ── Database ───────────────────────────────────────────────────────────────
 connectDB();
 
-// Port
-const PORT = 5000;
+// ── Routes ─────────────────────────────────────────────────────────────────
+const authRoutes = require("./routes/authRoutes");
+const interviewRoutes = require("./routes/interviewRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const userRoutes = require("./routes/userRoutes");
 
-// Test route
-app.get("/", (req, res) => {
-  res.send("Server is running");
-});
+app.get("/", (req, res) => res.send("Server is running"));
 
-app.use("/api/auth", authenticationRoutes);
-app.use("/api", interviewRoute);
+app.use("/api/auth", authRoutes);
+app.use("/api", interviewRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/user", userRoutes);
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// ── Start ──────────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -4,6 +4,9 @@ import InterviewSetup from "./pages/InterviewSetup";
 import InterviewScreen from "./pages/InterviewScreen";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Pricing from "./pages/Pricing";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentCancel from "./pages/PaymentCancel";
 
 export default function App() {
   return (
@@ -13,6 +16,11 @@ export default function App() {
       <Route path="/register" element={<Register />} />
       <Route path="/interview/setup" element={<InterviewSetup />} />
       <Route path="/interview/:id" element={<InterviewScreen />} />
+
+      {/* Subscription / payment routes */}
+      <Route path="/pricing" element={<Pricing />} />
+      <Route path="/payment/success" element={<PaymentSuccess />} />
+      <Route path="/payment/cancel" element={<PaymentCancel />} />
     </Routes>
   );
 }

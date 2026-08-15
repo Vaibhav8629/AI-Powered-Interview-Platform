@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import api, { getApiErrorMessage } from "../services/api";
+import { getInterviewerVideo, getInterviewerVoice } from "../services/interviewerHelpers";
 
 /**
  * AI Smart Interview — Full-screen Interview Screen
@@ -45,9 +46,10 @@ export default function InterviewScreen() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechRecognitionAvailable, setSpeechRecognitionAvailable] = useState(false);
-  const [interviewerVideo] = useState(() =>
-    Math.random() < 0.5 ? "/male-ai.mp4" : "/female-ai.mp4"
-  );
+  // interviewerGender drives BOTH the video and the TTS voice — never random.
+  // Defaults to "male"; can be toggled by the user via the gender switcher.
+  const [interviewerGender, setInterviewerGender] = useState("male");
+  const interviewerVideo = getInterviewerVideo(interviewerGender);
   const [speechVoices, setSpeechVoices] = useState([]);
 
   const currentAnswerRef = useRef("");
@@ -72,8 +74,12 @@ export default function InterviewScreen() {
   const intervalRef = useRef(null);
   const videoRef = useRef(null);
   const utteranceRef = useRef(null);
+  // Refs hold the resolved voices so speakQuestion always reads the latest selection
+  // even if called from a stale closure.
   const maleVoiceRef = useRef(null);
   const femaleVoiceRef = useRef(null);
+  // Tracks the current interviewer gender inside callbacks (avoids stale closures)
+  const interviewerGenderRef = useRef("male");
   const speechTokenRef = useRef(0);
   const lastSpokenQuestionKeyRef = useRef("");
   const mountedRef = useRef(true);
@@ -85,45 +91,17 @@ export default function InterviewScreen() {
     typeof window !== "undefined" &&
     Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
 
-  const getPreferredVoice = useCallback((voices) => {
-    const englishVoices = voices.filter((voice) => /^en([_-]|$)/i.test(voice.lang || ""));
+  // Keep interviewerGenderRef in sync so callbacks always read current gender
+  useEffect(() => {
+    interviewerGenderRef.current = interviewerGender;
+  }, [interviewerGender]);
 
-    return (
-      englishVoices.find((voice) => /google|microsoft|natural|enhanced/i.test(voice.name || "")) ||
-      englishVoices[0] ||
-      null
-    );
-  }, []);
-
-  const getGenderFromVideo = useCallback((videoPath) => {
-    if (!videoPath) return "male";
-    const path = videoPath.toLowerCase();
-    if (path.includes("female")) return "female";
-    return "male";
-  }, []);
-
-  const findBestVoiceForGender = useCallback((voices, gender) => {
-    if (!Array.isArray(voices) || voices.length === 0) return null;
-
-    const kwMale = ["male", "man", "david", "john", "alex", "daniel", "matt", "michael", "mark", "robert"];
-    const kwFemale = ["female", "woman", "zira", "susan", "emily", "linda", "kathy", "amy", "kate", "sara", "sarah"];
-
-    const candidates = voices.filter((v) => /^en([_-]|$)/i.test(v.lang || ""));
-    const keywords = gender === "female" ? kwFemale : kwMale;
-
-    // Prefer voices whose name or URI contains a gender/name hint
-    for (const k of keywords) {
-      const match = candidates.find((v) => (v.name || "").toLowerCase().includes(k) || (v.voiceURI || "").toLowerCase().includes(k));
-      if (match) return match;
-    }
-
-    // Fallback to voices explicitly containing 'female'/'male'
-    const explicit = candidates.find((v) => (v.name || "").toLowerCase().includes(gender) || (v.voiceURI || "").toLowerCase().includes(gender));
-    if (explicit) return explicit;
-
-    // Last resort: return preferred voice
-    return getPreferredVoice(voices);
-  }, [getPreferredVoice]);
+  // Re-resolve voices whenever available voices or gender changes
+  useEffect(() => {
+    maleVoiceRef.current = getInterviewerVoice("male", speechVoices);
+    femaleVoiceRef.current = getInterviewerVoice("female", speechVoices);
+    console.log("Voice resolved — male:", maleVoiceRef.current?.name, "| female:", femaleVoiceRef.current?.name);
+  }, [speechVoices]);
 
   const cancelCurrentSpeech = useCallback(() => {
     if (!speechSupported) {
@@ -154,6 +132,18 @@ export default function InterviewScreen() {
     }
   }, [speechSupported]);
 
+  /**
+   * handleGenderSwitch — user picks a different interviewer gender.
+   * Cancels any in-flight speech, resets the video, and forces the next
+   * question to re-speak with the new voice.
+   */
+  const handleGenderSwitch = useCallback((newGender) => {
+    if (newGender === interviewerGenderRef.current) return;
+    cancelCurrentSpeech();          // stops TTS + pauses/resets video
+    lastSpokenQuestionKeyRef.current = ""; // force re-speak on next render
+    setInterviewerGender(newGender);
+  }, [cancelCurrentSpeech]);
+
   const playInterviewVideo = useCallback(async () => {
     const videoElement = videoRef.current;
 
@@ -163,8 +153,7 @@ export default function InterviewScreen() {
     }
 
     try {
-      const gender = getGenderFromVideo(interviewerVideo);
-      console.log(`Playing ${interviewerVideo} (selected interviewer: ${gender})`);
+      console.log(`Playing ${getInterviewerVideo(interviewerGenderRef.current)} (${interviewerGenderRef.current} interviewer)`);
       // Ensure the video has data / can play before trying to play
       if (videoElement.readyState < 2) {
         await new Promise((resolve) => {
@@ -185,8 +174,7 @@ export default function InterviewScreen() {
     if (videoRef.current) {
       try {
         videoRef.current.pause();
-        const gender = getGenderFromVideo(interviewerVideo);
-        console.log(`Paused ${interviewerVideo} (selected interviewer: ${gender})`);
+        console.log(`Paused video (${interviewerGenderRef.current} interviewer)`);
 
         if (reset) {
           try {
@@ -245,19 +233,20 @@ export default function InterviewScreen() {
       // Track the current utterance so we can remove handlers if cancelled
       utteranceRef.current = utterance;
 
-      const inferredGender = getGenderFromVideo(interviewerVideo);
-      console.log("Selected interviewer:", inferredGender);
+      const gender = interviewerGenderRef.current;
+      console.log("Selected interviewer gender:", gender);
 
-      let selectedVoice = inferredGender === "female" ? femaleVoiceRef.current : maleVoiceRef.current;
+      // Use ref-cached voice if available, otherwise resolve fresh from voices list
+      let selectedVoice = gender === "female" ? femaleVoiceRef.current : maleVoiceRef.current;
       if (!selectedVoice) {
-        selectedVoice = findBestVoiceForGender(speechVoices, inferredGender) || getPreferredVoice(speechVoices);
+        selectedVoice = getInterviewerVoice(gender, speechVoices);
       }
 
       if (selectedVoice) {
         utterance.voice = selectedVoice;
-        console.log("Selected voice:", selectedVoice.name);
+        console.log(`Selected ${gender} voice:`, selectedVoice.name);
       } else {
-        console.log("No specific gendered voice found; using default/first available");
+        console.log("No gender-matched voice found; using browser default");
       }
 
       const speechToken = speechTokenRef.current;
@@ -270,9 +259,7 @@ export default function InterviewScreen() {
 
         console.log("TTS started");
         setIsSpeaking(true);
-        // Ensure we start the correct video for the selected interviewer
-        const gender = getGenderFromVideo(interviewerVideo);
-        console.log(`Playing ${interviewerVideo} (TTS started for ${gender})`);
+        console.log(`Playing video for ${interviewerGenderRef.current} interviewer`);
         await playInterviewVideo();
       };
 
@@ -331,7 +318,7 @@ export default function InterviewScreen() {
       console.log("speechSynthesis.speak returned");
       return true;
     },
-    [cancelCurrentSpeech, getPreferredVoice, pauseInterviewVideo, playInterviewVideo, speechVoices, speechSupported]
+    [cancelCurrentSpeech, pauseInterviewVideo, playInterviewVideo, speechVoices, speechSupported]
   );
 
   // Reset + restart countdown whenever the active question changes.
@@ -372,13 +359,7 @@ export default function InterviewScreen() {
       const vs = window.speechSynthesis.getVoices() || [];
       console.log("voiceschanged: found voices:", vs.map((v) => v.name));
       setSpeechVoices(vs);
-
-      try {
-        maleVoiceRef.current = findBestVoiceForGender(vs, "male");
-        femaleVoiceRef.current = findBestVoiceForGender(vs, "female");
-        console.log("Selected male voice:", maleVoiceRef.current && maleVoiceRef.current.name);
-        console.log("Selected female voice:", femaleVoiceRef.current && femaleVoiceRef.current.name);
-      } catch (e) {}
+      // maleVoiceRef / femaleVoiceRef are updated in the separate effect above
     };
 
     updateVoices();
@@ -523,6 +504,16 @@ export default function InterviewScreen() {
     return () => clearInterval(interval);
   }, [speechSupported, playInterviewVideo, pauseInterviewVideo]);
 
+  // When the interviewer video source changes (gender switch), force the video
+  // element to reload the new source so it's ready to play immediately.
+  useEffect(() => {
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
+    videoEl.pause();
+    videoEl.load(); // reload with new src
+    console.log("Video source reloaded for:", interviewerVideo);
+  }, [interviewerVideo]);
+
   useEffect(() => {
     console.log("question-effect: currentQuestionKey=", currentQuestionSpeechKey);
 
@@ -536,6 +527,17 @@ export default function InterviewScreen() {
     console.log("question-effect: speaking question");
     speakQuestion(currentQuestionText, currentQuestionSpeechKey);
   }, [cancelCurrentSpeech, currentQuestionSpeechKey, currentQuestionText, speakQuestion]);
+
+  // When the interviewer gender changes mid-session, re-speak the current
+  // question using the new voice (lastSpokenQuestionKeyRef was already cleared
+  // by handleGenderSwitch, so speakQuestion won't skip it).
+  useEffect(() => {
+    if (!currentQuestionText) return;
+    console.log("gender-effect: re-speaking question with new gender:", interviewerGender);
+    speakQuestion(currentQuestionText, currentQuestionSpeechKey, { force: true });
+    // We intentionally only re-run on interviewerGender — not on every question change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interviewerGender]);
 
   const handleAnswerChange = (value) => {
     setCurrentAnswer(value);
@@ -780,6 +782,7 @@ export default function InterviewScreen() {
           height: 100vh;
           flex-shrink: 0;
           background: #e5e7eb;
+          position: relative;
         }
 
         .interview-left img {
@@ -794,6 +797,48 @@ export default function InterviewScreen() {
           height: 100%;
           object-fit: cover;
           display: block;
+        }
+
+        /* ---------- GENDER SWITCHER ---------- */
+        .gender-switcher {
+          position: absolute;
+          bottom: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          background: rgba(255, 255, 255, 0.18);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.35);
+          border-radius: 9999px;
+          padding: 4px;
+          gap: 4px;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+          z-index: 10;
+        }
+
+        .gender-btn {
+          border: none;
+          border-radius: 9999px;
+          padding: 7px 18px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+          background: transparent;
+          color: rgba(255, 255, 255, 0.85);
+          white-space: nowrap;
+        }
+
+        .gender-btn.active {
+          background: #ffffff;
+          color: #065f46;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+        }
+
+        .gender-btn:not(.active):hover {
+          background: rgba(255, 255, 255, 0.22);
+          color: #ffffff;
         }
 
         /* ---------- RIGHT: INDEPENDENT WORKSPACE ---------- */
@@ -1173,6 +1218,7 @@ export default function InterviewScreen() {
           .interview-left {
             width: 100vw;
             height: 40vh;
+            position: relative;
           }
 
           .interview-right {
@@ -1201,6 +1247,25 @@ export default function InterviewScreen() {
           preload="auto"
           className="interviewer-video"
         />
+        {/* Interviewer gender switcher — overlaid at the bottom of the video panel */}
+        <div className="gender-switcher" role="group" aria-label="Select interviewer">
+          <button
+            type="button"
+            className={`gender-btn ${interviewerGender === "male" ? "active" : ""}`}
+            onClick={() => handleGenderSwitch("male")}
+            aria-pressed={interviewerGender === "male"}
+          >
+            👨 Male
+          </button>
+          <button
+            type="button"
+            className={`gender-btn ${interviewerGender === "female" ? "active" : ""}`}
+            onClick={() => handleGenderSwitch("female")}
+            aria-pressed={interviewerGender === "female"}
+          >
+            👩 Female
+          </button>
+        </div>
       </div>
 
       {/* RIGHT: independent workspace */}

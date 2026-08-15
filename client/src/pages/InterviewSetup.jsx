@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,9 +12,11 @@ import {
   FileText,
   RefreshCw,
   Loader2,
+  Zap,
+  AlertTriangle,
 } from "lucide-react";
 import ScannerBackground from '../components/ScannerBackground';
-import api, { getApiErrorMessage } from "../services/api";
+import api, { getApiErrorMessage, fetchUserCredits } from "../services/api";
 
 /* ------------------------------------------------------------------ */
 /*  Static config                                                     */
@@ -479,13 +481,96 @@ function StepThree({ data, update, errors }) {
   );
 }
 
-function StepFour({ data, update, errors }) {
+// Credit cost map — mirrors the backend CREDIT_COST_MAP exactly
+const CREDIT_COST_MAP = { 5: 5, 10: 10 };
+
+function getCreditCost(numberOfQuestions) {
+  // Round to nearest supported value (5 or 10)
+  const supported = [5, 10];
+  const nearest = supported.reduce((prev, curr) =>
+    Math.abs(curr - numberOfQuestions) < Math.abs(prev - numberOfQuestions) ? curr : prev
+  );
+  return CREDIT_COST_MAP[nearest] ?? 10;
+}
+
+function CreditCostPreview({ numberOfQuestions, userCredits, planAllowance, onUpgrade }) {
+  const cost = getCreditCost(numberOfQuestions);
+  const remaining = (userCredits ?? 0) - cost;
+  const sufficient = (userCredits ?? 0) >= cost;
+
+  if (userCredits === null || userCredits === undefined) return null;
+
+  return (
+    <div
+      className={`rounded-2xl border p-4 ${
+        sufficient
+          ? "border-emerald-200 bg-emerald-50/60"
+          : "border-rose-200 bg-rose-50/60"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <Zap className={`h-4 w-4 ${sufficient ? "text-emerald-600" : "text-rose-500"}`} />
+        <span className="text-[13px] font-bold text-neutral-700 uppercase tracking-wide">
+          Credit Summary
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-y-2.5">
+        <div className="text-[13px] text-neutral-500">Interview cost</div>
+        <div className={`text-[13px] font-bold text-right ${sufficient ? "text-emerald-700" : "text-rose-600"}`}>
+          {cost} credits
+        </div>
+        <div className="text-[13px] text-neutral-500">Available credits</div>
+        <div className="text-[13px] font-semibold text-right text-neutral-700">
+          {userCredits.toLocaleString()} / {planAllowance.toLocaleString()}
+        </div>
+        {sufficient ? (
+          <>
+            <div className="text-[13px] text-neutral-500">Remaining after</div>
+            <div className="text-[13px] font-semibold text-right text-emerald-700">
+              {remaining.toLocaleString()} credits
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="text-[13px] text-rose-600 font-semibold col-span-2 mt-1 flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Insufficient credits. You need {cost} but have {userCredits}.
+            </div>
+          </>
+        )}
+      </div>
+      {/* Credit bar */}
+      <div className="mt-3">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              sufficient ? "bg-emerald-500" : "bg-rose-400"
+            }`}
+            style={{ width: `${Math.min((userCredits / planAllowance) * 100, 100)}%` }}
+          />
+        </div>
+      </div>
+      {!sufficient && onUpgrade && (
+        <button
+          type="button"
+          onClick={onUpgrade}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-[13.5px] font-semibold text-white hover:bg-rose-700 transition-colors"
+        >
+          <Zap className="h-3.5 w-3.5" />
+          Upgrade Plan
+        </button>
+      )}
+    </div>
+  );
+}
+
+function StepFour({ data, update, errors, userCredits, planAllowance, onUpgrade }) {
   return (
     <div className="space-y-6">
       <Slider
         label="Number of Questions"
         min={5}
-        max={15}
+        max={10}
         unit="questions"
         value={data.numberOfQuestions}
         onChange={(v) => update({ numberOfQuestions: v })}
@@ -501,6 +586,13 @@ function StepFour({ data, update, errors }) {
         onChange={(v) => update({ duration: v })}
       />
       <FieldError message={errors.duration} />
+
+      <CreditCostPreview
+        numberOfQuestions={data.numberOfQuestions}
+        userCredits={userCredits}
+        planAllowance={planAllowance}
+        onUpgrade={onUpgrade}
+      />
     </div>
   );
 }
@@ -614,8 +706,26 @@ export default function InterviewSetup() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Credit state — fetched from backend, never trusted from frontend
+  const [userCredits, setUserCredits] = useState(null);
+  const [planAllowance, setPlanAllowance] = useState(10);
+
   const getAuthToken = () =>
     localStorage.getItem("token") || localStorage.getItem("authToken");
+
+  // Fetch credits on mount (only if logged in)
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) return;
+    fetchUserCredits()
+      .then((data) => {
+        setUserCredits(data.credits);
+        setPlanAllowance(data.planAllowance ?? 10);
+      })
+      .catch(() => {
+        // Non-critical — setup still works, credit check is enforced on backend
+      });
+  }, []);
 
   const update = (patch) => {
     setData((prev) => ({ ...prev, ...patch }));
@@ -641,8 +751,8 @@ export default function InterviewSetup() {
       if (data.topics.length === 0) e.topics = "Select at least one topic";
     }
     if (validateStepFour) {
-      if (data.numberOfQuestions < 5 || data.numberOfQuestions > 15)
-        e.numberOfQuestions = "Number of questions must be between 5 and 15";
+      if (data.numberOfQuestions < 5 || data.numberOfQuestions > 10)
+        e.numberOfQuestions = "Number of questions must be 5 or 10";
       if (data.duration < 10 || data.duration > 90)
         e.duration = "Duration must be between 10 and 90 minutes";
     }
@@ -682,6 +792,11 @@ export default function InterviewSetup() {
             duration: data.duration,
           });
 
+          // Update credit display with the server-confirmed remaining balance
+          if (response?.data?.creditsRemaining !== undefined) {
+            setUserCredits(response.data.creditsRemaining);
+          }
+
           const interviewId = response?.data?.interviewId || response?.data?.interview?._id;
 
           if (!interviewId) {
@@ -690,10 +805,22 @@ export default function InterviewSetup() {
 
           navigate(`/interview/${interviewId}`);
         } catch (error) {
-          setErrors((prev) => ({
-            ...prev,
-            submit: getApiErrorMessage(error, "Unable to start interview."),
-          }));
+          // Handle insufficient credits specifically
+          const status = error?.response?.status;
+          const responseData = error?.response?.data;
+
+          if (status === 402 && responseData?.availableCredits !== undefined) {
+            setUserCredits(responseData.availableCredits);
+            setErrors((prev) => ({
+              ...prev,
+              submit: `Insufficient credits. You need ${responseData.requiredCredits} but have ${responseData.availableCredits}. Upgrade your plan to continue.`,
+            }));
+          } else {
+            setErrors((prev) => ({
+              ...prev,
+              submit: getApiErrorMessage(error, "Unable to start interview."),
+            }));
+          }
         } finally {
           setSubmitting(false);
         }
@@ -817,7 +944,16 @@ export default function InterviewSetup() {
                   {step === 1 && <StepOne data={data} update={update} errors={errors} />}
                   {step === 2 && <StepTwo data={data} update={update} errors={errors} />}
                   {step === 3 && <StepThree data={data} update={update} errors={errors} />}
-                  {step === 4 && <StepFour data={data} update={update} errors={errors} />}
+                  {step === 4 && (
+                    <StepFour
+                      data={data}
+                      update={update}
+                      errors={errors}
+                      userCredits={userCredits}
+                      planAllowance={planAllowance}
+                      onUpgrade={() => navigate("/pricing")}
+                    />
+                  )}
                   {step === 5 && <StepFive data={data} update={update} />}
                 </div>
               </motion.div>
@@ -850,13 +986,25 @@ export default function InterviewSetup() {
             <button
               type="button"
               onClick={goNext}
-              disabled={submitting}
+              disabled={
+                submitting ||
+                (step === 5 &&
+                  userCredits !== null &&
+                  userCredits < getCreditCost(data.numberOfQuestions))
+              }
               className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-6 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70"
             >
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Starting...
+                </>
+              ) : step === 5 &&
+                userCredits !== null &&
+                userCredits < getCreditCost(data.numberOfQuestions) ? (
+                <>
+                  <AlertTriangle className="h-4 w-4" />
+                  Insufficient Credits
                 </>
               ) : step === 5 ? (
                 "Start Interview"
@@ -869,9 +1017,19 @@ export default function InterviewSetup() {
             </button>
           </div>
           {errors.submit ? (
-            <p className="mt-3 text-right text-[13px] font-medium text-rose-600">
-              {errors.submit}
-            </p>
+            <div className="mt-3 text-right">
+              <p className="text-[13px] font-medium text-rose-600">{errors.submit}</p>
+              {errors.submit.toLowerCase().includes("insufficient") && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/pricing")}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-rose-50 border border-rose-200 px-3 py-1.5 text-[12.5px] font-semibold text-rose-700 hover:bg-rose-100 transition-colors"
+                >
+                  <Zap className="h-3.5 w-3.5" />
+                  Upgrade Plan
+                </button>
+              )}
+            </div>
           ) : null}
         </div>
       </div>

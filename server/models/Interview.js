@@ -37,7 +37,7 @@ const interviewSchema = new mongoose.Schema(
       type: Number,
       required: true,
       minimum: 5,
-      maximum: 15,
+      maximum: 10,
     },
 
     duration: {

@@ -6,6 +6,8 @@ import {
   Star, ChevronDown, Volume2, TrendingUp, Award, Users, Target, ShieldCheck,
   MessageSquare, Clock,
 } from 'lucide-react';
+import CreditBadge from '../components/CreditBadge';
+import { fetchUserCredits } from '../services/api';
 
 const ANSWER_TEXT =
   "During my recent project, I led a team of five engineers through a critical migration, balancing scope changes with a two-week deadline.";
@@ -87,6 +89,7 @@ export default function LandingPage() {
   const [typedLength, setTypedLength] = useState(0);
   const [openFaq, setOpenFaq] = useState(0);
   const [counts, setCounts] = useState({ interviews: 0, questions: 0, accuracy: 0, hours: 0 });
+  const [creditInfo, setCreditInfo] = useState(null);
   const waveBars = useRef(Array.from({ length: 26 }, () => 18 + Math.random() * 62)).current;
   const workflowRef = useRef(null);
 
@@ -135,6 +138,15 @@ export default function LandingPage() {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Fetch credit info for logged-in users
+  useEffect(() => {
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    if (!token) return;
+    fetchUserCredits()
+      .then(setCreditInfo)
+      .catch(() => setCreditInfo(null));
   }, []);
 
   useEffect(() => {
@@ -253,6 +265,14 @@ export default function LandingPage() {
           </div>
 
           <div className="nav-buttons" style={styles.navButtons}>
+            {creditInfo && (
+              <CreditBadge
+                credits={creditInfo.credits}
+                planAllowance={creditInfo.planAllowance ?? 100}
+                plan={creditInfo.plan ?? 'free'}
+                onClick={() => navigate('/pricing')}
+              />
+            )}
             <button type="button" className="btn-login" onClick={() => navigate('/login')}>Log in</button>
             <button type="button" className="btn-cta btn-icon-button" onClick={() => navigate('/interview/setup')}>
               <span>Start interview</span>

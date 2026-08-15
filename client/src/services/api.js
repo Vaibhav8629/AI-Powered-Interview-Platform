@@ -36,4 +36,36 @@ export function getApiErrorMessage(error, fallbackMessage = "Something went wron
   );
 }
 
+// ── Credit / user helpers ──────────────────────────────────────────────────
+
+/** Fetch the current user's credit balance and plan info. */
+export async function fetchUserCredits() {
+  const { data } = await api.get("/api/user/credits");
+  return data; // { credits, creditsResetAt, plan, subscriptionStatus, planAllowance }
+}
+
+/** Fetch subscription details. */
+export async function fetchSubscription() {
+  const { data } = await api.get("/api/payment/subscription");
+  return data;
+}
+
+/** Create a Stripe Checkout session and return the redirect URL. */
+export async function createCheckoutSession(priceId) {
+  const { data } = await api.post("/api/payment/create-checkout-session", { priceId });
+  return data; // { success, url }
+}
+
+/** Create a Stripe Customer Portal session and return the redirect URL. */
+export async function createPortalSession() {
+  const { data } = await api.post("/api/payment/create-portal-session");
+  return data; // { success, url }
+}
+
+/** Refresh user info from /api/auth/me — keeps frontend in sync after login. */
+export async function fetchMe() {
+  const { data } = await api.get("/api/auth/me");
+  return data; // { user }
+}
+
 export default api;
