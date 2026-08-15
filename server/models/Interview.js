@@ -68,6 +68,44 @@ const interviewSchema = new mongoose.Schema(
       },
     ],
 
+    feedback: {
+      type: {
+        overallScore: {
+          type: Number,
+          default: 0,
+        },
+        confidenceScore: {
+          type: Number,
+          default: 0,
+        },
+        correctnessScore: {
+          type: Number,
+          default: 0,
+        },
+        communicationScore: {
+          type: Number,
+          default: 0,
+        },
+        questionWiseFeedback: [
+          {
+            questionNumber: Number,
+            question: String,
+            feedback: String,
+            score: Number,
+          },
+        ],
+        overallSummary: {
+          type: String,
+          default: "",
+        },
+        generatedAt: {
+          type: Date,
+          default: null,
+        },
+      },
+      default: null,
+    },
+
     currentQuestion: {
       type: Number,
       default: 0,

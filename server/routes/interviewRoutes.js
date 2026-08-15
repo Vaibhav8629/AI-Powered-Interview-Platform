@@ -34,6 +34,11 @@ router.post(
     authMiddleware,
     interviewController.completeInterview
 );
+router.post(
+    "/interview/:interviewId/feedback",
+    authMiddleware,
+    interviewController.generateInterviewFeedback,
+);
 router.get(
     "/interview/:interviewId/result",
     authMiddleware,

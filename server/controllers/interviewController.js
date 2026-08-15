@@ -280,60 +280,20 @@ const submitAnswer = async (req, res) => {
     }
 
     question.answer = answer;
-
-    const prompt = `
-You are an AI technical interviewer.
-
-Evaluate the candidate's answer to the interview question.
-
-Question:
-${question.question}
-
-Candidate's Answer:
-${answer}
-
-Evaluate the answer based on:
-1. Correctness
-2. Technical understanding
-3. Completeness
-4. Clarity
-
-Give a score from 0 to 10.
-
-Give concise and constructive feedback.
-Do not be overly harsh.
-`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "object",
-          properties: {
-            feedback: { type: "string" },
-            score: { type: "integer", minimum: 0, maximum: 10 },
-          },
-          required: ["feedback", "score"],
-        },
-      },
-    });
-
-    const result = JSON.parse(response.text);
-    question.feedback = result.feedback;
-    question.score = result.score;
+    question.feedback = "";
+    question.score = null;
 
     await interview.save();
 
     return res.status(200).json({
-      message: "Answer evaluated successfully",
-      feedback: result.feedback,
-      score: result.score,
+      success: true,
+      message: "Answer saved successfully",
+      interviewId: interview._id,
+      questionId,
     });
   } catch (error) {
     console.error("Submit answer error:", error);
-    return res.status(500).json({ message: "Error evaluating answer" });
+    return res.status(500).json({ success: false, message: "Error saving answer" });
   }
 };
 
@@ -552,6 +512,176 @@ const saveAntiCheating = async (req, res) => {
   }
 };
 
+const buildInterviewFeedbackPrompt = (interview) => {
+  const questionBlocks = (interview.questions || [])
+    .map((questionItem, index) => {
+      const answer = questionItem.answer && questionItem.answer.trim()
+        ? questionItem.answer.trim()
+        : "[No answer provided]";
+
+      return `Question ${index + 1}: ${questionItem.question}\nCandidate Answer:\n${answer}`;
+    })
+    .join("\n\n---\n\n");
+
+  return `
+You are an expert technical interviewer evaluating a completed interview.
+
+Interview context:
+- Role: ${interview.role || "Not provided"}
+- Experience: ${interview.experience || "Not provided"}
+- Difficulty: ${interview.difficulty || "Not provided"}
+- Interview Type: ${interview.interviewType || "Not provided"}
+
+Evaluate the full interview using all question-and-answer pairs below.
+Return only valid JSON in the exact schema requested.
+
+Interview Questions and Answers:
+${questionBlocks}
+
+Scoring requirements:
+- Overall Score: 0-100
+- Confidence Score: 0-100
+- Correctness Score: 0-100
+- Communication Score: 0-100
+- questionWiseFeedback: one entry for every question, with questionNumber, question, feedback, and score.
+- overallSummary: short but complete summary of the candidate's overall interview performance.
+
+Important rules:
+1. Use the full interview data, not a single question in isolation.
+2. Do not add any extra fields beyond the required schema.
+3. Return valid JSON only, no markdown fences.
+4. Score conservatively but fairly.
+5. If a question had no answer, mention it honestly in the feedback.
+`;
+};
+
+const normalizeInterviewFeedback = (feedback = {}) => {
+  const questionWiseFeedback = Array.isArray(feedback.questionWiseFeedback)
+    ? feedback.questionWiseFeedback.map((item, index) => ({
+        questionNumber: Number(item?.questionNumber ?? index + 1),
+        question: String(item?.question ?? `Question ${index + 1}`),
+        feedback: String(item?.feedback ?? ""),
+        score: Number(item?.score ?? 0),
+      }))
+    : [];
+
+  return {
+    overallScore: Number(feedback.overallScore ?? 0),
+    confidenceScore: Number(feedback.confidenceScore ?? 0),
+    correctnessScore: Number(feedback.correctnessScore ?? 0),
+    communicationScore: Number(feedback.communicationScore ?? 0),
+    questionWiseFeedback,
+    overallSummary: String(feedback.overallSummary ?? ""),
+  };
+};
+
+const generateInterviewFeedback = async (req, res) => {
+  try {
+    const interview = await Interview.findOne({
+      _id: req.params.interviewId,
+      user: req.user.userId,
+    });
+
+    if (!interview) {
+      return res.status(404).json({ success: false, message: "Interview not found" });
+    }
+
+    if (interview.feedback) {
+      return res.status(200).json({
+        success: true,
+        message: "Interview feedback already exists",
+        feedback: interview.feedback,
+      });
+    }
+
+    const hasUnansweredQuestion = interview.questions.some(
+      (q) => !q.answer || q.answer.trim() === ""
+    );
+
+    if (hasUnansweredQuestion) {
+      return res.status(400).json({
+        success: false,
+        message: "All questions must be answered before generating feedback",
+      });
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: buildInterviewFeedbackPrompt(interview),
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          properties: {
+            overallScore: { type: "integer", minimum: 0, maximum: 100 },
+            confidenceScore: { type: "integer", minimum: 0, maximum: 100 },
+            correctnessScore: { type: "integer", minimum: 0, maximum: 100 },
+            communicationScore: { type: "integer", minimum: 0, maximum: 100 },
+            questionWiseFeedback: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  questionNumber: { type: "integer", minimum: 1 },
+                  question: { type: "string" },
+                  feedback: { type: "string" },
+                  score: { type: "integer", minimum: 0, maximum: 100 },
+                },
+                required: ["questionNumber", "question", "feedback", "score"],
+              },
+            },
+            overallSummary: { type: "string" },
+          },
+          required: [
+            "overallScore",
+            "confidenceScore",
+            "correctnessScore",
+            "communicationScore",
+            "questionWiseFeedback",
+            "overallSummary",
+          ],
+        },
+      },
+    });
+
+    const parsedResponse = JSON.parse(response.text);
+    const normalizedFeedback = normalizeInterviewFeedback(parsedResponse);
+
+    interview.feedback = {
+      ...normalizedFeedback,
+      generatedAt: new Date(),
+    };
+
+    interview.questions = interview.questions.map((question, index) => {
+      const matchedFeedback = normalizedFeedback.questionWiseFeedback.find(
+        (item) => Number(item.questionNumber) === index + 1
+      );
+
+      if (matchedFeedback) {
+        question.feedback = matchedFeedback.feedback;
+        question.score = Number(matchedFeedback.score ?? question.score ?? 0);
+      }
+
+      return question;
+    });
+
+    await interview.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Interview feedback generated successfully",
+      feedback: interview.feedback,
+    });
+  } catch (error) {
+    console.error("generateInterviewFeedback error:", error);
+    return res.status(502).json({
+      success: false,
+      message: "Error generating interview feedback",
+      error: error.message,
+    });
+  }
+};
+
 const getInterviewResult = async (req, res) => {
   try {
     const interview = await Interview.findOne({
@@ -584,6 +714,7 @@ const getInterviewResult = async (req, res) => {
       averageScore: Number(averageScore.toFixed(2)),
       percentage: Number(percentage.toFixed(2)),
       completedAt: interview.completedAt,
+      feedback: interview.feedback,
       questions: questions.map((q) => ({
         questionId: q._id,
         question: q.question,
@@ -605,6 +736,9 @@ module.exports = {
   submitAnswer,
   getNextQuestion,
   completeInterview,
+  generateInterviewFeedback,
+  buildInterviewFeedbackPrompt,
+  normalizeInterviewFeedback,
   getInterviewResult,
   saveAntiCheating,
   terminateCheating,
