@@ -15,7 +15,7 @@ import {
   Zap,
   AlertTriangle,
 } from "lucide-react";
-import ScannerBackground from '../components/ScannerBackground';
+import ScannerBackground from '../components/Scannerbackground';
 import api, { getApiErrorMessage, fetchUserCredits } from "../services/api";
 
 /* ------------------------------------------------------------------ */

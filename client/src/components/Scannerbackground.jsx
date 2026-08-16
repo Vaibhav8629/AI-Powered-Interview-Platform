@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import "./ScannerBackground.css";
+import "./Scannerbackground.css";
 
 /**
  * ScannerBackground
