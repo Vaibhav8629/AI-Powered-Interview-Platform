@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import api from "../services/api";
 import {
   Zap,
   ArrowLeft,
@@ -27,7 +28,7 @@ import {
  *   - `interviewId` is read from the route (react-router `useParams`),
  *     never hardcoded.
  *   - On mount, calls the EXISTING backend endpoint:
- *       POST /interview/:interviewId/feedback
+ *       POST /api/interview/:interviewId/feedback
  *   - The response is expected to be shaped like:
  *       {
  *         overallScore: number,
@@ -44,9 +45,6 @@ import {
  * exactly which backend field is being rendered.
  * ---------------------------------------------------------------------------
  */
-
-// Base API path — adjust only if your app's axios/fetch base differs.
-const API_BASE = "/interview";
 
 export default function InterviewFeedback() {
   const { interviewId } = useParams(); // dynamic interview id from the route
@@ -76,20 +74,7 @@ export default function InterviewFeedback() {
     setErrorMessage("");
 
     try {
-      const res = await fetch(`${API_BASE}/${interviewId}/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(
-          text || `Request failed with status ${res.status}. Please try again.`
-        );
-      }
-
-      const data = await res.json();
+      const { data } = await api.post(`/api/interview/${interviewId}/feedback`);
 
       // Backend may wrap the payload as { feedback: {...} } or return it flat.
       const result = data?.feedback ?? data;

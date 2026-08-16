@@ -8,6 +8,7 @@ import Pricing from "./pages/Pricing";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCancel from "./pages/PaymentCancel";
 import InterviewFeedback from "./pages/FeedbackPage";
+import InterviewHistory from "./pages/InterviewHistory";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/interview/:id" element={<InterviewScreen />} />
       <Route path="/feedback/:interviewId" element={<InterviewFeedback />} />
       <Route path="/feedback" element={<InterviewFeedback />} />
+      <Route path="/interview/history" element={<InterviewHistory />} />
 
       {/* Subscription / payment routes */}
       <Route path="/pricing" element={<Pricing />} />

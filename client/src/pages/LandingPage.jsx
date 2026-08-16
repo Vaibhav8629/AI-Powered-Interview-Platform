@@ -341,7 +341,7 @@ export default function LandingPage() {
             <span>Start interview</span>
             <ArrowRight size={16} className="btn-arrow" aria-hidden="true" />
           </button>
-          <button type="button" className="btn-secondary" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic}>
+          <button type="button" className="btn-secondary" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic} onClick={() => navigate('/interview/history')}>
             View history
           </button>
         </div>

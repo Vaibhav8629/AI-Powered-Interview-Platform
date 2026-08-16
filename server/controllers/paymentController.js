@@ -121,7 +121,7 @@ const handleWebhook = async (req, res) => {
       // This is the ONLY place new subscriptions grant credits.
       // The session object reliably contains our metadata.
       case "checkout.session.completed": {
-        await handleCheckoutSessionCompleted(event.data.object, planConfig);
+        await handleCheckoutSessionCompleted(event.data.object, planConfig, event.id);
         break;
       }
 
@@ -143,7 +143,7 @@ const handleWebhook = async (req, res) => {
         const invoice = event.data.object;
         // Only act on renewal cycles, not the first payment (handled above)
         if (invoice.billing_reason === "subscription_cycle") {
-          await handleSubscriptionRenewal(invoice, planConfig);
+          await handleSubscriptionRenewal(invoice, planConfig, event.id);
         }
         break;
       }
@@ -243,10 +243,10 @@ const getSubscription = async (req, res) => {
  * @param {Object} session     Stripe CheckoutSession object
  * @param {Object} planConfig  priceId → { plan, monthlyCredits }
  */
-async function handleCheckoutSessionCompleted(session, planConfig) {
+async function handleCheckoutSessionCompleted(session, planConfig, eventId) {
   const sessionId = session.id;
 
-  console.log(`[Webhook] checkout.session.completed | Session: ${sessionId}`);
+  console.log(`[Webhook] checkout.session.completed | Session: ${sessionId} | Event: ${eventId}`);
 
   // ── Read userId from session metadata (reliably set at session creation) ──
   const userId = session.metadata?.userId;
@@ -275,8 +275,8 @@ console.log("============================================");
     return;
   }
 
-  // ── Fetch user with idempotency field ──────────────────────────────────
-  const user = await User.findById(userId).select("+processedCheckoutSessions");
+  // ── Fetch user with idempotency fields ─────────────────────────────────
+  const user = await User.findById(userId).select("+processedWebhookEvents +processedCheckoutSessions");
   if (!user) {
     console.error(`[Webhook] User not found for userId: ${userId}`);
     return;
@@ -291,8 +291,10 @@ console.log("[Webhook] DB Plan BEFORE:", user.plan);
 console.log("[Webhook] DB Subscription Status BEFORE:", user.subscriptionStatus);
 
   // ── Idempotency check ──────────────────────────────────────────────────
-  if (user.processedCheckoutSessions.includes(sessionId)) {
-    console.warn(`[Webhook] DUPLICATE detected — session ${sessionId} already processed for user ${userId}. Skipping.`);
+  const duplicateEvent = user.processedWebhookEvents.includes(eventId);
+  const duplicateSession = user.processedCheckoutSessions.includes(sessionId);
+  if (duplicateEvent || duplicateSession) {
+    console.warn(`[Webhook] DUPLICATE detected — event ${eventId} / session ${sessionId} already processed for user ${userId}. Skipping.`);
     return;
   }
 
@@ -332,10 +334,14 @@ if (session.subscription) {
   }
 }
 
-  // ── Mark session as processed (idempotency) ────────────────────────────
+  // ── Mark Stripe event as processed (idempotency) ───────────────────────
+  user.processedWebhookEvents.push(eventId);
   user.processedCheckoutSessions.push(sessionId);
 
-  // Keep the array bounded so it doesn't grow indefinitely
+  // Keep the arrays bounded so they don't grow indefinitely
+  if (user.processedWebhookEvents.length > 100) {
+    user.processedWebhookEvents = user.processedWebhookEvents.slice(-100);
+  }
   if (user.processedCheckoutSessions.length > 100) {
     user.processedCheckoutSessions = user.processedCheckoutSessions.slice(-100);
   }
@@ -460,11 +466,11 @@ async function handleSubscriptionCancelled(subscription) {
  * @param {Object} invoice     Stripe Invoice object
  * @param {Object} planConfig
  */
-async function handleSubscriptionRenewal(invoice, planConfig) {
+async function handleSubscriptionRenewal(invoice, planConfig, eventId) {
   const customerId = invoice.customer;
   const subId = invoice.subscription;
 
-  console.log(`[Webhook] invoice.paid (renewal) | Sub: ${subId} | Customer: ${customerId}`);
+  console.log(`[Webhook] invoice.paid (renewal) | Sub: ${subId} | Customer: ${customerId} | Event: ${eventId}`);
 
   let user = await User.findOne({ stripeSubscriptionId: subId });
   if (!user) {

@@ -129,6 +129,7 @@ export default function Pricing() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState(null);
 
   const token = localStorage.getItem("token") || localStorage.getItem("authToken");
   const isLoggedIn = Boolean(token);
@@ -290,6 +291,7 @@ export default function Pricing() {
         <div style={s.cardsGrid}>
           {PLANS.map((plan, idx) => {
             const isCurrent = isLoggedIn && currentPlan === plan.id;
+            const isSelected = selectedPlan === plan.id;
             // A logged-in user on free can upgrade to standard or premium.
             // A logged-in user on standard can upgrade to premium.
             const isUpgradable =
@@ -307,9 +309,13 @@ export default function Pricing() {
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, delay: idx * 0.1 }}
+                onClick={() => setSelectedPlan(plan.id)}
                 style={{
                   ...s.card,
-                  ...(plan.highlighted ? s.cardHighlighted : {}),
+                  ...(isSelected ? s.cardSelected : {}),
+                  ...(isSelected && plan.highlighted ? s.cardSelectedHighlighted : {}),
+                  ...(isSelected ? {} : plan.highlighted ? s.cardHighlighted : {}),
+                  cursor: "pointer",
                 }}
               >
                 {plan.highlighted && (
@@ -321,18 +327,30 @@ export default function Pricing() {
 
                 <div style={s.cardTop}>
                   <div>
-                    <div style={{ ...s.planName, ...(plan.highlighted ? { color: "#fff" } : {}) }}>
+                    <div style={{
+                      ...s.planName,
+                      ...(isSelected ? { color: "#0a1f17" } : {}),
+                    }}>
                       {plan.name}
                     </div>
-                    <div style={{ ...s.planTagline, ...(plan.highlighted ? { color: "rgba(255,255,255,0.72)" } : {}) }}>
+                    <div style={{
+                      ...s.planTagline,
+                      ...(isSelected ? { color: "#4a6b5f" } : {}),
+                    }}>
                       {plan.tagline}
                     </div>
                   </div>
                   <div style={s.priceBlock}>
-                    <span style={{ ...s.price, ...(plan.highlighted ? { color: "#fff" } : {}) }}>
+                    <span style={{
+                      ...s.price,
+                      ...(isSelected ? { color: "#0a1f17" } : {}),
+                    }}>
                       {plan.price}
                     </span>
-                    <span style={{ ...s.period, ...(plan.highlighted ? { color: "rgba(255,255,255,0.6)" } : {}) }}>
+                    <span style={{
+                      ...s.period,
+                      ...(isSelected ? { color: "#4a6b5f" } : {}),
+                    }}>
                       {plan.period}
                     </span>
                   </div>
@@ -348,10 +366,17 @@ export default function Pricing() {
                     const Icon = f.icon;
                     return (
                       <li key={f.label} style={s.featureItem}>
-                        <span style={{ ...s.featureIcon, ...(plan.highlighted ? s.featureIconDark : {}) }}>
+                        <span style={{
+                          ...s.featureIcon,
+                          ...(isSelected ? { background: "#dcfce7", color: "#059669" } : {}),
+                          ...((plan.highlighted && !isSelected) ? s.featureIconDark : {}),
+                        }}>
                           <Icon size={13} />
                         </span>
-                        <span style={{ ...s.featureLabel, ...(plan.highlighted ? { color: "rgba(255,255,255,0.9)" } : {}) }}>
+                        <span style={{
+                          ...s.featureLabel,
+                          ...(isSelected ? { color: "#214236" } : {}),
+                        }}>
                           {f.label}
                         </span>
                       </li>
@@ -640,13 +665,25 @@ const s = {
     background: "#ffffff",
     boxShadow: "0 2px 12px rgba(10,31,23,0.05)",
     position: "relative",
-    transition: "box-shadow 0.2s, transform 0.2s",
+    transition: "background-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease",
+    userSelect: "none",
   },
   cardHighlighted: {
-    background: "linear-gradient(160deg, #064e3b, #0f5f49)",
-    border: "1px solid #059669",
-    boxShadow: "0 16px 48px rgba(5,46,28,0.22)",
-    transform: "translateY(-4px)",
+    background: "#ffffff",
+    border: "1px solid #d9e2e0",
+    boxShadow: "0 2px 12px rgba(10,31,23,0.05)",
+    transform: "none",
+  },
+  cardSelected: {
+    background: "#f0fdf4",
+    border: "1px solid #86efac",
+    boxShadow: "0 0 0 1px rgba(34, 197, 94, 0.18), 0 0 18px rgba(16, 185, 129, 0.12), 0 0 32px rgba(34, 197, 94, 0.08)",
+    transform: "translateY(-2px)",
+  },
+  cardSelectedHighlighted: {
+    background: "#f0fdf4",
+    border: "1px solid #86efac",
+    boxShadow: "0 0 0 1px rgba(34, 197, 94, 0.2), 0 0 22px rgba(16, 185, 129, 0.14), 0 0 36px rgba(34, 197, 94, 0.08)",
   },
   popularBadge: {
     position: "absolute",

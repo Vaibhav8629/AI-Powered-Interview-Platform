@@ -74,12 +74,19 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ── Idempotency: track which Stripe Checkout Sessions have already
-    //    been processed so duplicate webhook deliveries are ignored.
+    // ── Idempotency: track processed Stripe webhook event IDs so duplicate
+    //    deliveries are ignored even if the same payment is retried.
+    processedWebhookEvents: {
+      type: [String],
+      default: [],
+      select: false,
+    },
+
+    // Backward-compatible legacy field kept for older records.
     processedCheckoutSessions: {
       type: [String],
       default: [],
-      select: false,          // excluded from normal queries — fetched explicitly
+      select: false,
     },
   },
   {
