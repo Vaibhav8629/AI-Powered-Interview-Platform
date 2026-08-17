@@ -33,6 +33,11 @@ const interviewSchema = new mongoose.Schema(
       required: true,
     },
 
+    resumeContent: {
+      type: String,
+      default: null,
+    },
+
     numberOfQuestions: {
       type: Number,
       required: true,

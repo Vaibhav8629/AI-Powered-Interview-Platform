@@ -68,8 +68,11 @@ const generateQuestions = async ({
   difficulty,
   topics,
   numberOfQuestions,
+  resumeContent,
 }) => {
-  const prompt = `
+  const hasMyProjects = Array.isArray(topics) && topics.includes("My Projects");
+  
+  let prompt = `
 Generate ${numberOfQuestions} interview questions for a ${role} candidate.
 Experience level: ${experience}
 Interview type: ${interviewType}
@@ -78,6 +81,32 @@ Topics: ${(topics || []).join(", ")}
 
 Return concise questions only.
 `;
+
+  // Add resume-based instructions if "My Projects" is selected and resume content is available
+  if (hasMyProjects && resumeContent) {
+    prompt = `
+Generate ${numberOfQuestions} interview questions for a ${role} candidate.
+Experience level: ${experience}
+Interview type: ${interviewType}
+Difficulty: ${difficulty}
+Topics: ${(topics || []).join(", ")}
+
+IMPORTANT: The candidate has selected "My Projects" as a topic. Below is their resume content. 
+Please analyze their actual projects and generate questions specifically based on the projects, 
+technologies, and experiences mentioned in their resume. Ask about project architecture, design decisions, 
+implementation challenges, technologies used, and lessons learned from their actual work.
+
+Do not ask generic project questions when specific project information is available.
+Generate a mix of questions based on their actual projects and the other selected topics.
+
+RESUME CONTENT:
+---
+${resumeContent}
+---
+
+Return concise questions only, mixing project-specific questions with the other selected topics.
+`;
+  }
 
   try {
     const response = await ai.models.generateContent({
@@ -130,6 +159,7 @@ const createInterview = async (req, res) => {
       numberOfQuestions,
       duration,
       status,
+      resumeContent,
     } = req.body;
 
     // 1. Validate required fields
@@ -146,6 +176,17 @@ const createInterview = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "All interview configuration fields are required.",
+      });
+    }
+
+    // 1b. Validate resume requirement for "My Projects" topic
+    console.log("Received resumeContent:", !!resumeContent);
+    console.log("Resume content length:", resumeContent?.length ?? 0);
+
+    if (topics.includes("My Projects") && !resumeContent?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Resume content is required when My Projects is selected.",
       });
     }
 
@@ -191,6 +232,7 @@ const createInterview = async (req, res) => {
       difficulty,
       topics,
       numberOfQuestions,
+      resumeContent,
     });
 
     // 7. Deduct credits (in memory only — not saved yet)
@@ -208,6 +250,7 @@ const createInterview = async (req, res) => {
       duration,
       questions,
       status,
+      resumeContent,
     });
 
     // 9. Save the updated credit balance (after interview is created successfully)

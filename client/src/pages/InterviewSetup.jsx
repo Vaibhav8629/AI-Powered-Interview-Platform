@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import ScannerBackground from '../components/Scannerbackground';
 import api, { getApiErrorMessage, fetchUserCredits } from "../services/api";
+import { extractResumeText } from "../services/resumeParser";
 
 /* ------------------------------------------------------------------ */
 /*  Static config                                                     */
@@ -63,6 +64,7 @@ const PREDEFINED_TOPICS = [
   "System Design",
   "Git",
   "APIs",
+  "My Projects",
 ];
 
 const emptyForm = {
@@ -597,8 +599,9 @@ function StepFour({ data, update, errors, userCredits, planAllowance, onUpgrade 
   );
 }
 
-function StepFive({ data, update }) {
+function StepFive({ data, update, errors }) {
   const [dragging, setDragging] = useState(false);
+  const requiresResume = data.topics.includes("My Projects");
 
   const onDrop = (e) => {
     e.preventDefault();
@@ -617,39 +620,47 @@ function StepFive({ data, update }) {
   return (
     <div>
       {!data.resume ? (
-        <label
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-colors duration-200 ${
-            dragging
-              ? "border-emerald-500 bg-emerald-50"
-              : "border-neutral-250 bg-neutral-50/60 hover:border-emerald-300 hover:bg-emerald-50/40"
-          }`}
-        >
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
-            <Upload className="h-5 w-5 text-emerald-600" />
-          </div>
-          <p className="mt-4 text-[15px] font-semibold text-neutral-800">
-            Upload Resume
-          </p>
-          <p className="mt-1 text-[13.5px] text-neutral-500">
-            Drag & drop your resume here, or{" "}
-            <span className="font-semibold text-emerald-600">Browse</span>
-          </p>
-          <p className="mt-3 text-[12px] font-medium tracking-wide text-neutral-400">
-            PDF / DOC / DOCX
-          </p>
-          <input
-            type="file"
-            accept=".pdf,.doc,.docx"
-            onChange={onBrowse}
-            className="hidden"
-          />
-        </label>
+        <>
+          <label
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-colors duration-200 ${
+              dragging
+                ? "border-emerald-500 bg-emerald-50"
+                : "border-neutral-250 bg-neutral-50/60 hover:border-emerald-300 hover:bg-emerald-50/40"
+            }`}
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+              <Upload className="h-5 w-5 text-emerald-600" />
+            </div>
+            <p className="mt-4 text-[15px] font-semibold text-neutral-800">
+              Upload Resume
+            </p>
+            <p className="mt-1 text-[13.5px] text-neutral-500">
+              Drag & drop your resume here, or{" "}
+              <span className="font-semibold text-emerald-600">Browse</span>
+            </p>
+            <p className="mt-3 text-[12px] font-medium tracking-wide text-neutral-400">
+              PDF / DOC / DOCX
+            </p>
+            {requiresResume && (
+              <p className="mt-3 text-[12px] font-medium text-amber-600">
+                Resume is required when My Projects is selected
+              </p>
+            )}
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              onChange={onBrowse}
+              className="hidden"
+            />
+          </label>
+          <FieldError message={errors.resume} />
+        </>
       ) : (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -738,6 +749,7 @@ export default function InterviewSetup() {
     const validateStepTwo = finalStep || step === 2;
     const validateStepThree = finalStep || step === 3;
     const validateStepFour = finalStep || step === 4;
+    const validateStepFive = finalStep || step === 5;
 
     if (validateStepOne) {
       if (!data.role) e.role = "Please select a role";
@@ -755,6 +767,12 @@ export default function InterviewSetup() {
         e.numberOfQuestions = "Number of questions must be 5 or 10";
       if (data.duration < 10 || data.duration > 90)
         e.duration = "Duration must be between 10 and 90 minutes";
+    }
+    if (validateStepFive) {
+      // Resume is mandatory only if "My Projects" is selected
+      if (data.topics.includes("My Projects") && !data.resume) {
+        e.resume = "Resume is required when My Projects is selected.";
+      }
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -782,7 +800,31 @@ export default function InterviewSetup() {
             throw new Error("You need to be logged in to start an interview.");
           }
 
-          const response = await api.post("/api/create-interview", {
+          // Extract resume text if "My Projects" is selected
+          let resumeContent = null;
+          const myProjectsSelected = data.topics.includes("My Projects");
+
+          if (myProjectsSelected && data.resume) {
+            try {
+              const extractedText = await extractResumeText(data.resume);
+
+              if (!extractedText || !extractedText.trim()) {
+                throw new Error(
+                  "Resume appears to be empty or could not be read. Please use a text-based PDF or DOCX file."
+                );
+              }
+
+              resumeContent = extractedText.trim();
+            } catch (error) {
+              throw new Error(`Failed to extract resume: ${error.message}`);
+            }
+          }
+
+          // Debug: verify resumeContent is populated before sending
+          console.log("My Projects selected:", myProjectsSelected);
+          console.log("Resume content length:", resumeContent?.length ?? 0);
+
+          const payload = {
             role: data.role,
             experience: data.experience,
             interviewType: data.interviewType,
@@ -790,7 +832,14 @@ export default function InterviewSetup() {
             topics: data.topics,
             numberOfQuestions: data.numberOfQuestions,
             duration: data.duration,
-          });
+          };
+
+          // Always include resumeContent when My Projects is selected — backend requires it
+          if (myProjectsSelected) {
+            payload.resumeContent = resumeContent;
+          }
+
+          const response = await api.post("/api/create-interview", payload);
 
           // Update credit display with the server-confirmed remaining balance
           if (response?.data?.creditsRemaining !== undefined) {
@@ -954,7 +1003,7 @@ export default function InterviewSetup() {
                       onUpgrade={() => navigate("/pricing")}
                     />
                   )}
-                  {step === 5 && <StepFive data={data} update={update} />}
+                  {step === 5 && <StepFive data={data} update={update} errors={errors} />}
                 </div>
               </motion.div>
             </AnimatePresence>
