@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const connectDB = require("./config/db");
+const rateLimit = require("express-rate-limit");
+const { ipKeyGenerator } = require("express-rate-limit");
 
 const app = express();
 
@@ -31,6 +33,25 @@ app.use(express.json());
 
 // ── Database ───────────────────────────────────────────────────────────────
 connectDB();
+
+//── Rate Limit ───────────────────────────────────────────────────────────────
+const routeLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+
+  keyGenerator: (req) => {
+    return `${ipKeyGenerator(req.ip)}:${req.method}:${req.baseUrl}${req.path}`;
+  },
+
+  standardHeaders: true,
+  legacyHeaders: false,
+
+  message: {
+    message: "Too many requests for this route. Try again later."
+  }
+});
+
+app.use("/api", routeLimiter);
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 const authRoutes = require("./routes/authRoutes");
