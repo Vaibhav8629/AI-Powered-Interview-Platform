@@ -21,10 +21,29 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Optional — null for Google-only accounts
     password: {
       type: String,
-      required: true,
+      default: null,
       minlength: 6,
+    },
+
+    // ── Google OAuth ───────────────────────────────────────────────
+    googleId: {
+      type: String,
+      default: null,
+      index: { sparse: true },
+    },
+
+    picture: {
+      type: String,
+      default: null,
+    },
+
+    authProvider: {
+      type: String,
+      enum: ["local", "google", "both"],
+      default: "local",
     },
 
     // ── Credit system ──────────────────────────────────────────────

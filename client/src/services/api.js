@@ -81,6 +81,17 @@ export async function fetchMe() {
 }
 
 /**
+ * Authenticate with Google using the credential from Google Identity Services.
+ * Works for both login and registration — the backend handles both cases.
+ * @param {string} credential  Google ID token from the GSI prompt/button
+ * @returns {{ token: string, user: object }}
+ */
+export async function googleAuthApi(credential) {
+  const { data } = await api.post("/api/auth/google", { credential });
+  return data; // { message, token, user }
+}
+
+/**
  * Submit the anti-cheating summary at the end of an interview.
  * @param {string} interviewId
  * @param {{ tabSwitchCount, fullscreenExitCount, copyAttemptCount, pasteAttemptCount, cutAttemptCount, violations }} summary

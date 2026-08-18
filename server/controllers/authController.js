@@ -1,7 +1,10 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { OAuth2Client } = require("google-auth-library");
 const { resetMonthlyCreditsIfNeeded } = require("../services/creditService");
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -13,6 +16,8 @@ function buildUserPayload(user) {
     id: user._id,
     name: user.name,
     email: user.email,
+    picture: user.picture ?? null,
+    authProvider: user.authProvider ?? "local",
     credits: user.credits,
     plan: user.plan,
     subscriptionStatus: user.subscriptionStatus,
@@ -44,6 +49,7 @@ const registerUser = async (req, res) => {
       name,
       email,
       password: hashedPassword,
+      authProvider: "local",
     });
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
@@ -75,6 +81,13 @@ const loginUser = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    // Google-only accounts have no password — direct them to Google sign-in
+    if (!user.password) {
+      return res.status(401).json({
+        message: "This account uses Google sign-in. Please continue with Google.",
+      });
     }
 
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
@@ -126,4 +139,97 @@ const getMe = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, getMe };
+// ─────────────────────────────────────────────────────────────────────────────
+// GOOGLE OAUTH
+// ─────────────────────────────────────────────────────────────────────────────
+const googleAuth = async (req, res) => {
+  try {
+    const { credential } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({ message: "Google credential is required" });
+    }
+
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      return res.status(500).json({ message: "Google OAuth is not configured on this server" });
+    }
+
+    // Verify the Google ID token — never trust the raw profile from the client
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      return res.status(401).json({ message: "Invalid or expired Google credential" });
+    }
+
+    const { sub: googleId, email, name, picture, email_verified } = payload;
+
+    if (!email_verified) {
+      return res.status(401).json({ message: "Google account email is not verified" });
+    }
+
+    if (!email || !name) {
+      return res.status(400).json({ message: "Insufficient profile information from Google" });
+    }
+
+    // Find an existing user by googleId first, then by email (handles linking)
+    let user = await User.findOne({ googleId });
+
+    if (!user) {
+      user = await User.findOne({ email });
+    }
+
+    if (user) {
+      // Existing user — link Google account if not already linked
+      let changed = false;
+
+      if (!user.googleId) {
+        user.googleId = googleId;
+        changed = true;
+      }
+      if (picture && user.picture !== picture) {
+        user.picture = picture;
+        changed = true;
+      }
+      if (user.authProvider === "local" && user.googleId) {
+        user.authProvider = "both";
+        changed = true;
+      }
+
+      // Apply monthly credit reset if due
+      const { reset } = resetMonthlyCreditsIfNeeded(user);
+      if (reset || changed) {
+        await user.save();
+      }
+    } else {
+      // New user — create account via Google
+      user = await User.create({
+        name,
+        email,
+        password: null,
+        googleId,
+        picture: picture ?? null,
+        authProvider: "google",
+      });
+    }
+
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
+
+    return res.status(200).json({
+      message: "Google authentication successful",
+      token,
+      user: buildUserPayload(user),
+    });
+  } catch (error) {
+    console.error("googleAuth error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+module.exports = { registerUser, loginUser, getMe, googleAuth };
