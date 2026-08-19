@@ -32,6 +32,11 @@ function normalizeQuestion(question, index) {
     questionTime: question?.questionTime || DEFAULT_QUESTION_TIME,
     feedback: question?.feedback || "",
     score: question?.score ?? null,
+    // DSA / LeetCode extended fields — null for non-DSA questions
+    description: question?.description || null,
+    examples: Array.isArray(question?.examples) ? question.examples : [],
+    constraints: Array.isArray(question?.constraints) ? question.constraints : [],
+    leetcodeUrl: question?.leetcodeUrl || null,
   };
 }
 
@@ -1339,6 +1344,83 @@ export default function InterviewScreen() {
           color: #6b7280;
         }
 
+        /* ---------- DSA PROBLEM STATEMENT ---------- */
+        .dsa-problem {
+          margin-top: 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          font-size: 13.5px;
+          color: #1f2937;
+          line-height: 1.65;
+        }
+
+        .dsa-section-label {
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.07em;
+          color: #059669;
+          margin: 0 0 4px 0;
+        }
+
+        .dsa-description {
+          white-space: pre-wrap;
+          margin: 0;
+          color: #374151;
+        }
+
+        .dsa-examples {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .dsa-example-block {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 10px 14px;
+          font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+          font-size: 12.5px;
+          white-space: pre-wrap;
+          color: #1e293b;
+        }
+
+        .dsa-constraints {
+          margin: 0;
+          padding: 0 0 0 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .dsa-constraints li {
+          font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+          font-size: 12.5px;
+          color: #334155;
+        }
+
+        .dsa-leetcode-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #0284c7;
+          text-decoration: none;
+          border: 1px solid #bae6fd;
+          background: #f0f9ff;
+          border-radius: 6px;
+          padding: 5px 10px;
+          width: fit-content;
+          transition: background 0.15s ease;
+        }
+
+        .dsa-leetcode-link:hover {
+          background: #e0f2fe;
+        }
+
         /* ---------- ANSWER AREA ---------- */
         .answer-input-wrap {
           position: relative;
@@ -1935,6 +2017,51 @@ export default function InterviewScreen() {
               </button>
             ) : null}
           </div>
+
+          {/* DSA / LeetCode full problem statement — only shown when present */}
+          {currentQuestion?.description && (
+            <div className="dsa-problem">
+              <div>
+                <p className="dsa-section-label">Problem Description</p>
+                <p className="dsa-description">{currentQuestion.description}</p>
+              </div>
+
+              {currentQuestion.examples?.length > 0 && (
+                <div>
+                  <p className="dsa-section-label">Examples</p>
+                  <div className="dsa-examples">
+                    {currentQuestion.examples.map((ex, i) => (
+                      <div key={i} className="dsa-example-block">
+                        {ex.exampleText || `Example ${ex.exampleNum ?? i + 1}`}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {currentQuestion.constraints?.length > 0 && (
+                <div>
+                  <p className="dsa-section-label">Constraints</p>
+                  <ul className="dsa-constraints">
+                    {currentQuestion.constraints.map((c, i) => (
+                      <li key={i}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {currentQuestion.leetcodeUrl && (
+                <a
+                  href={currentQuestion.leetcodeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="dsa-leetcode-link"
+                >
+                  🔗 View on LeetCode
+                </a>
+              )}
+            </div>
+          )}
 
           {!speechSupported ? (
             <p className="read-question-fallback">Read aloud is not available in this browser.</p>

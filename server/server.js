@@ -37,7 +37,7 @@ connectDB();
 //── Rate Limit ───────────────────────────────────────────────────────────────
 const routeLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 5,
+  max: 15,
 
   keyGenerator: (req) => {
     return `${ipKeyGenerator(req.ip)}:${req.method}:${req.baseUrl}${req.path}`;

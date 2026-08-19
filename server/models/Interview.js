@@ -58,6 +58,28 @@ const interviewSchema = new mongoose.Schema(
           type: String,
           required: true,
         },
+        // DSA / LeetCode extended fields — only populated for DSA interviews
+        description: {
+          type: String,
+          default: null,
+        },
+        examples: {
+          type: [
+            {
+              exampleNum: Number,
+              exampleText: String,
+            },
+          ],
+          default: [],
+        },
+        constraints: {
+          type: [String],
+          default: [],
+        },
+        leetcodeUrl: {
+          type: String,
+          default: null,
+        },
         answer: {
           type: String,
           default: "",
