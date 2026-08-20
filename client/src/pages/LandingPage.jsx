@@ -1,149 +1,161 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  Menu, X, Zap, Mic, BarChart3, Brain, BrainCircuit, Briefcase, Activity, CheckCircle2, Sparkles, ArrowRight,
-  Star, ChevronDown, Volume2, TrendingUp, Award, Users, Target, ShieldCheck,
-  MessageSquare, Clock,
+  Activity,
+  ArrowRight,
+  BarChart3,
+  Brain,
+  BrainCircuit,
+  Briefcase,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  FileText,
+  LockKeyhole,
+  Menu,
+  MessageSquare,
+  Mic,
+  MousePointer2,
+  Play,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Volume2,
+  X,
+  Zap,
 } from 'lucide-react';
 import CreditBadge from '../components/CreditBadge';
 import { fetchUserCredits } from '../services/api';
 
 const ANSWER_TEXT =
-  "During my recent project, I led a team of five engineers through a critical migration, balancing scope changes with a two-week deadline.";
+  'I would first clarify the user profile and constraints, then outline the tradeoffs before choosing a token-bucket approach with shared state.';
 
-const FEATURES = [
+const NAV_ITEMS = [
+  { href: '#features', label: 'Features' },
+  { href: '#workflow', label: 'Workflow' },
+  { href: '#capabilities', label: 'Capabilities' },
+  { href: '#faq', label: 'FAQ' },
+];
+
+const FEATURE_CARDS = [
   {
-    title: 'Adaptive questioning',
-    description: 'Every follow-up is generated live from your last answer, not pulled from a static bank.',
-    icon: Brain,
-    size: 'lg',
+    title: 'Adaptive question flow',
+    description: 'The interviewer follows your actual answer, asking sharper follow-ups when your reasoning needs more depth.',
+    icon: BrainCircuit,
+    accent: 'mint',
   },
   {
-    title: 'Role-calibrated',
-    description: 'Interviews tuned to your target role, seniority, and stack.',
+    title: 'Role-aware setup',
+    description: 'Tune every session around role, seniority, interview type, and the skills you want to pressure-test.',
     icon: Target,
-    size: 'sm',
+    accent: 'amber',
   },
   {
-    title: 'Real-time evaluation',
-    description: 'Communication, technical depth, and structure scored as you speak.',
-    icon: BarChart3,
-    size: 'sm',
-  },
-  {
-    title: 'Voice-native',
-    description: 'Natural spoken interviews with live transcription, no typing required.',
+    title: 'Voice-first practice',
+    description: 'Practice out loud with live transcription, listening states, and a pace that feels closer to a real conversation.',
     icon: Mic,
-    size: 'md',
+    accent: 'blue',
   },
   {
-    title: 'Actionable feedback',
-    description: 'Leave every session with three concrete things to fix before the real thing.',
-    icon: CheckCircle2,
-    size: 'md',
-  },
-  {
-    title: 'Private by default',
-    description: 'Recordings and transcripts are yours. Delete any session in one tap.',
-    icon: ShieldCheck,
-    size: 'sm',
+    title: 'Actionable review',
+    description: 'Turn every answer into clear feedback on structure, communication, and technical confidence.',
+    icon: BarChart3,
+    accent: 'rose',
   },
 ];
 
 const WORKFLOW = [
-  { step: '01', title: 'Choose your interview', description: 'Select your target role, experience level, and interview type to build a personalized session.', icon: Brain },
-  { step: '02', title: 'Interview with AI', description: 'Answer realistic questions with intelligent follow-ups that adapt to your responses.', icon: Mic },
-  { step: '03', title: 'Get instant feedback', description: 'See exactly where you excelled and where to improve, backed by AI-scored evaluation.', icon: BarChart3 },
+  {
+    step: '01',
+    title: 'Configure the room',
+    description: 'Choose role, level, domain, and interview type before the session begins.',
+    icon: Briefcase,
+  },
+  {
+    step: '02',
+    title: 'Answer naturally',
+    description: 'Speak through real interview prompts while the AI adapts to your response.',
+    icon: Volume2,
+  },
+  {
+    step: '03',
+    title: 'Review the signal',
+    description: 'See what worked, what was unclear, and where to practice next.',
+    icon: FileText,
+  },
 ];
 
 const CAPABILITIES = [
-  { title: 'Adaptive questions', description: 'Questions dynamically adjust based on your answers and performance.', icon: BrainCircuit, image: '/Adaptive_question.png' },
-  { title: 'Role-based interviews', description: 'Practice interviews specifically designed for your target job role.', icon: Briefcase, image: '/Role_based_interviews.png' },
-  { title: 'Real-time evaluation', description: 'Get evaluated on communication, technical knowledge, and answer quality.', icon: Activity, image: '/Real_time_evaluation.png' },
-  { title: 'Performance insights', description: 'Track your progress and identify exactly where you need to improve.', icon: BarChart3, image: '/Performance_insights.png' },
-  { title: 'Voice-native', description: 'Natural spoken interviews with live transcription, no typing required.', icon: Mic, image: '/Voice_native.png' },
-];
-
-const LOGOS = ['Nova Labs', 'Quantify', 'Northbeam', 'Fintra', 'Corelab', 'Meridian', 'Hearthstack', 'Palladium'];
-
-const TESTIMONIALS = [
-  { name: 'Ananya R.', role: 'SDE-2 candidate', initials: 'AR', rating: 5, quote: 'The follow-up questions felt like a real panel, not a script. I walked into my onsite already calm.' },
-  { name: 'Marcus T.', role: 'Frontend engineer', initials: 'MT', rating: 5, quote: 'The feedback on my communication score was blunt in the best way. Fixed the exact thing that was holding me back.' },
-  { name: 'Priya K.', role: 'New grad, ML', initials: 'PK', rating: 4, quote: 'Ran six mock interviews in a weekend. Each one adapted to what I struggled with in the last.' },
+  { title: 'Adaptive questions', description: 'Follow-ups adjust to the strength and clarity of each answer.', icon: BrainCircuit, image: '/Adaptive_question.png' },
+  { title: 'Role-based interviews', description: 'Sessions match the job function, seniority, and interview style you select.', icon: Briefcase, image: '/Role_based_interviews.png' },
+  { title: 'Real-time evaluation', description: 'The session tracks communication, confidence, and technical reasoning.', icon: Activity, image: '/Real_time_evaluation.png' },
+  { title: 'Performance insights', description: 'Feedback highlights the areas that matter most before the next round.', icon: TrendingUp, image: '/Performance_insights.png' },
+  { title: 'Voice-native practice', description: 'Speak, pause, and recover the way you would in a live interview.', icon: Mic, image: '/Voice_native.png' },
 ];
 
 const FAQS = [
-  { q: 'How realistic are the AI follow-up questions?', a: 'Every follow-up is generated from your actual answer in the moment, the same way a human interviewer probes deeper on a weak point or an interesting claim.' },
-  { q: 'Which roles and levels are supported?', a: 'From new-grad to staff level, across frontend, backend, ML, and general SWE tracks. You choose the role and seniority before each session.' },
-  { q: 'Can I practice by voice?', a: 'Yes. Sessions are voice-native with live transcription, so you practice the way you will actually be interviewed.' },
-  { q: 'What happens to my recordings?', a: 'They stay private to your account. You can review, download, or permanently delete any session at any time.' },
+  {
+    q: 'How realistic are the AI follow-up questions?',
+    a: 'The interview flow is based on your previous answer, so follow-ups can probe missing details, tradeoffs, examples, or unclear reasoning.',
+  },
+  {
+    q: 'Can I practice for different roles?',
+    a: 'Yes. The setup flow lets you tailor sessions to role, experience level, interview type, and the skills you want to practice.',
+  },
+  {
+    q: 'Does voice practice work like a real interview?',
+    a: 'The product is designed around spoken answers, live transcription, listening states, and post-session feedback rather than typed drills.',
+  },
+  {
+    q: 'Where do I see previous sessions?',
+    a: 'Use the history view to return to completed interviews and review past feedback.',
+  },
 ];
+
+const METERS = [
+  { label: 'Structure', value: 82 },
+  { label: 'Depth', value: 74 },
+  { label: 'Clarity', value: 89 },
+];
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.08, delayChildren: 0.08 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } },
+};
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [visibleSections, setVisibleSections] = useState({});
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [typedLength, setTypedLength] = useState(0);
   const [openFaq, setOpenFaq] = useState(0);
-  const [counts, setCounts] = useState({ interviews: 0, questions: 0, accuracy: 0, hours: 0 });
   const [creditInfo, setCreditInfo] = useState(null);
-  const waveBars = useRef(Array.from({ length: 26 }, () => 18 + Math.random() * 62)).current;
-  const workflowRef = useRef(null);
+  const waveBars = useRef([36, 58, 42, 76, 54, 88, 64, 45, 72, 52, 84, 61, 44, 70, 96, 58, 82, 47, 63, 75, 50, 69]).current;
 
-  const { scrollYProgress } = useScroll({
-    target: workflowRef,
-    offset: ['start end', 'end start'],
-  });
-
-  const lineProgress = useTransform(scrollYProgress, [0.04, 0.70], [0, 1], { clamp: true });
-  const smoothLine = useSpring(lineProgress, { stiffness: 140, damping: 18, restDelta: 0.001 });
-
-  const step1Progress = useTransform(scrollYProgress, [0.06, 0.22], [0, 1], { clamp: true });
-  const step2Progress = useTransform(scrollYProgress, [0.24, 0.40], [0, 1], { clamp: true });
-  const step3Progress = useTransform(scrollYProgress, [0.42, 0.58], [0, 1], { clamp: true });
-  const smoothStep1 = useSpring(step1Progress, { stiffness: 140, damping: 18, restDelta: 0.001 });
-  const smoothStep2 = useSpring(step2Progress, { stiffness: 140, damping: 18, restDelta: 0.001 });
-  const smoothStep3 = useSpring(step3Progress, { stiffness: 140, damping: 18, restDelta: 0.001 });
-  const step1Glow = useTransform(smoothStep1, (v) => `0px ${v * 10}px ${v * 26}px rgba(16,185,129,${0.22 * v})`);
-  const step2Glow = useTransform(smoothStep2, (v) => `0px ${v * 10}px ${v * 26}px rgba(16,185,129,${0.22 * v})`);
-  const step3Glow = useTransform(smoothStep3, (v) => `0px ${v * 10}px ${v * 26}px rgba(16,185,129,${0.22 * v})`);
-
-  const stepCardX = [
-    useTransform(smoothStep1, [0, 1], [50, 0]),
-    useTransform(smoothStep2, [0, 1], [-50, 0]),
-    useTransform(smoothStep3, [0, 1], [50, 0]),
-  ];
-  const stepCardScale = [
-    useTransform(smoothStep1, [0, 1], [0.98, 1]),
-    useTransform(smoothStep2, [0, 1], [0.98, 1]),
-    useTransform(smoothStep3, [0, 1], [0.98, 1]),
-  ];
-  const stepNodeScale = [
-    useTransform(smoothStep1, [0, 1], [0.6, 1]),
-    useTransform(smoothStep2, [0, 1], [0.6, 1]),
-    useTransform(smoothStep3, [0, 1], [0.6, 1]),
-  ];
-
-  const navItems = [
-    { href: '#features', label: 'Features' },
-    { href: '#workflow', label: 'How it works' },
-    { href: '#capabilities', label: 'AI capabilities' },
-    { href: '#about', label: 'About' },
-  ];
+  const transcript = useMemo(() => ANSWER_TEXT.slice(0, typedLength), [typedLength]);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
+    const handleScroll = () => setScrolled(window.scrollY > 24);
+    handleScroll();
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Fetch credit info for logged-in users
   useEffect(() => {
     const token = localStorage.getItem('token') || localStorage.getItem('authToken');
     if (!token) return;
+
     fetchUserCredits()
       .then(setCreditInfo)
       .catch(() => setCreditInfo(null));
@@ -158,113 +170,52 @@ export default function LandingPage() {
           }
         });
       },
-      { threshold: 0.15, rootMargin: '0px 0px -60px 0px' }
+      { threshold: 0.18, rootMargin: '0px 0px -80px 0px' }
     );
+
     document.querySelectorAll('[data-observe]').forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, []);
 
-  const [timelineStage, setTimelineStage] = useState(0);
   useEffect(() => {
-    if (!visibleSections.workflow || timelineStage !== 0) return;
-    const timers = [
-      setTimeout(() => setTimelineStage(1), 120),
-      setTimeout(() => setTimelineStage(2), 900),
-      setTimeout(() => setTimelineStage(3), 1700),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, [visibleSections.workflow, timelineStage]);
-
-  // Typewriter effect for the live transcript in the hero console
-  useEffect(() => {
-    let dir = 1;
+    let direction = 1;
     const interval = setInterval(() => {
-      setTypedLength((len) => {
-        if (dir === 1 && len >= ANSWER_TEXT.length) {
-          dir = -1;
-          return len;
+      setTypedLength((length) => {
+        if (direction === 1 && length >= ANSWER_TEXT.length) {
+          direction = -1;
+          return length;
         }
-        if (dir === -1 && len <= 0) {
-          dir = 1;
-          return len;
+        if (direction === -1 && length <= 0) {
+          direction = 1;
+          return length;
         }
-        return len + dir;
+        return length + direction;
       });
-    }, 32);
+    }, 34);
+
     return () => clearInterval(interval);
   }, []);
 
-  // Animated counters once the stats section enters view
-  useEffect(() => {
-    if (!visibleSections.stats) return;
-    const targets = { interviews: 12000, questions: 50, accuracy: 96, hours: 24 };
-    const duration = 1400;
-    const start = performance.now();
-    let frame;
-    const tick = (now) => {
-      const progress = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCounts({
-        interviews: Math.round(targets.interviews * eased),
-        questions: Math.round(targets.questions * eased),
-        accuracy: Math.round(targets.accuracy * eased),
-        hours: Math.round(targets.hours * eased),
-      });
-      if (progress < 1) frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [visibleSections.stats]);
-
-  const handleHeroParallax = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMousePos({
-      x: ((e.clientX - rect.left) / rect.width - 0.5) * 2,
-      y: ((e.clientY - rect.top) / rect.height - 0.5) * 2,
-    });
-  };
-
-  const handleTilt = (e) => {
-    const card = e.currentTarget;
-    const rect = card.getBoundingClientRect();
-    const rx = ((e.clientY - rect.top - rect.height / 2) / rect.height) * -10;
-    const ry = ((e.clientX - rect.left - rect.width / 2) / rect.width) * 10;
-    card.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-6px)`;
-  };
-  const resetTilt = (e) => {
-    e.currentTarget.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg) translateY(0)';
-  };
-
-  const handleMagnetic = (e) => {
-    const btn = e.currentTarget;
-    const rect = btn.getBoundingClientRect();
-    const x = (e.clientX - rect.left - rect.width / 2) * 0.28;
-    const y = (e.clientY - rect.top - rect.height / 2) * 0.28;
-    btn.style.transform = `translate(${x}px, ${y}px)`;
-  };
-  const resetMagnetic = (e) => {
-    e.currentTarget.style.transform = 'translate(0, 0)';
-  };
-
-  const revealClass = (id) => `reveal ${visibleSections[id] ? 'reveal-visible' : ''}`;
+  const closeMenu = () => setIsMenuOpen(false);
+  const goToSetup = () => navigate('/interview/setup');
+  const goToHistory = () => navigate('/interview/history');
 
   return (
-    <div style={styles.container}>
-      {/* Navbar */}
+    <div className="landing-page">
       <nav className={`navbar ${scrolled ? 'navbar-scrolled' : ''}`}>
-        <div style={styles.navContent}>
-          <div style={styles.logo}>
-            <span className="logo-badge"><Zap size={18} color="#ffffff" aria-hidden="true" /></span>
-            <span style={styles.logoText}>InterviewAI</span>
-          </div>
+        <div className="nav-shell">
+          <a className="brand" href="/" aria-label="InterviewAI home">
+            <span className="brand-mark"><Zap size={17} aria-hidden="true" /></span>
+            <span>InterviewAI</span>
+          </a>
 
-          <div className="nav-links" style={styles.navLinks}>
-            {navItems.map((item) => (
-              <a key={item.href} href={item.href} className="nav-link">{item.label}</a>
+          <div className="nav-links">
+            {NAV_ITEMS.map((item) => (
+              <a key={item.href} href={item.href}>{item.label}</a>
             ))}
           </div>
 
-          <div className="nav-buttons" style={styles.navButtons}>
+          <div className="nav-actions">
             {creditInfo && (
               <CreditBadge
                 credits={creditInfo.credits}
@@ -273,798 +224,1271 @@ export default function LandingPage() {
                 onClick={() => navigate('/pricing')}
               />
             )}
-            <button type="button" className="btn-login" onClick={() => navigate('/login')}>Log in</button>
-            <button type="button" className="btn-cta btn-icon-button" onClick={() => navigate('/interview/setup')}>
+            <button type="button" className="ghost-button" onClick={() => navigate('/login')}>Log in</button>
+            <button type="button" className="solid-button small" onClick={goToSetup}>
               <span>Start interview</span>
-              <ArrowRight size={14} className="btn-arrow" aria-hidden="true" />
+              <ArrowRight size={15} aria-hidden="true" />
             </button>
           </div>
 
           <button
             type="button"
-            className="mobile-menu-btn"
+            className="menu-button"
             onClick={() => setIsMenuOpen((open) => !open)}
             aria-expanded={isMenuOpen}
             aria-controls="mobile-menu"
             aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
           >
-            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {isMenuOpen ? <X size={23} /> : <Menu size={23} />}
           </button>
         </div>
 
         {isMenuOpen && (
           <div id="mobile-menu" className="mobile-menu">
-            {navItems.map((item) => (
-              <a key={item.href} href={item.href} className="mobile-menu-link" onClick={() => setIsMenuOpen(false)}>
-                {item.label}
-              </a>
+            {NAV_ITEMS.map((item) => (
+              <a key={item.href} href={item.href} onClick={closeMenu}>{item.label}</a>
             ))}
-            <div className="mobile-menu-buttons">
-              <button type="button" className="btn-login" onClick={() => navigate('/login')}>Log in</button>
-              <button type="button" className="btn-cta" onClick={() => navigate('/interview/setup')}>Start interview</button>
+            <div className="mobile-actions">
+              <button type="button" className="ghost-button" onClick={() => navigate('/login')}>Log in</button>
+              <button type="button" className="solid-button" onClick={goToSetup}>Start interview</button>
             </div>
           </div>
         )}
       </nav>
 
-      {/* Hero */}
-      <section style={styles.hero} onMouseMove={handleHeroParallax}>
-        <div className="blob blob-a" style={{ transform: `translate(${mousePos.x * 14}px, ${mousePos.y * 14}px)` }} />
-        <div className="blob blob-b" style={{ transform: `translate(${mousePos.x * -18}px, ${mousePos.y * -10}px)` }} />
-        <div className="noise-overlay" aria-hidden="true" />
-
-        <div className="hero-badge">
-          <span className="badge"><Sparkles size={13} style={{ marginRight: 6, verticalAlign: '-2px' }} aria-hidden="true" />AI-powered mock interview platform</span>
-        </div>
-
-        <h1 className="hero-title" aria-label="Practice interviews. Build confidence. Get hired.">
-          {['Practice', 'interviews.'].map((w, i) => (
-            <span key={w} className="word-reveal" style={{ animationDelay: `${i * 90}ms` }}>{w}&nbsp;</span>
-          ))}
-          <br />
-          <span className="highlight">
-            {['Build', 'confidence.'].map((w, i) => (
-              <span key={w} className="word-reveal" style={{ animationDelay: `${(i + 2) * 90}ms` }}>{w}&nbsp;</span>
-            ))}
-          </span>
-          <br />
-          <span className="word-reveal" style={{ animationDelay: '360ms' }}>Get hired.</span>
-        </h1>
-
-        <p className="hero-description">
-          Practice realistic AI-powered mock interviews tailored to your role, experience, and skills.
-          Get intelligent follow-up questions, performance insights, and actionable feedback.
-        </p>
-
-        <div style={styles.heroCTAContainer}>
-          <button type="button" className="btn-primary btn-icon-button" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic} onClick={() => navigate('/interview/setup')}>
-            <span>Start interview</span>
-            <ArrowRight size={16} className="btn-arrow" aria-hidden="true" />
-          </button>
-          <button type="button" className="btn-secondary" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic} onClick={() => navigate('/interview/history')}>
-            View history
-          </button>
-        </div>
-
-        <div className="trust-line">Role-based interviews &middot; Adaptive questions &middot; AI-powered feedback</div>
-
-        {/* AI Interview Console */}
-        <div className="console-wrap">
-          <div className="glass-card console">
-            <div className="console-top">
-              <div className="console-dots"><span /><span /><span /></div>
-              <div className="console-title">Live AI interview &mdash; Frontend developer</div>
-              <div className="console-timer"><Clock size={13} aria-hidden="true" /> 01:42</div>
-            </div>
-
-            <div className="console-body">
-              <div className="console-question">
-                <div className="eyebrow">Question</div>
-                <p>&ldquo;Tell me about a challenging project you worked on.&rdquo;</p>
-              </div>
-
-              <div className="waveform" aria-hidden="true">
-                {waveBars.map((h, i) => (
-                  <span key={i} className="wave-bar" style={{ '--h': `${h}%`, animationDelay: `${i * 0.06}s` }} />
-                ))}
-              </div>
-
-              <div className="console-transcript">
-                <div className="eyebrow"><Volume2 size={12} style={{ marginRight: 4, verticalAlign: '-2px' }} aria-hidden="true" />Live transcript</div>
-                <p>{ANSWER_TEXT.slice(0, typedLength)}<span className="caret" /></p>
-              </div>
-
-              <div className="thinking-row">
-                <span className="thinking-dots"><span /><span /><span /></span>
-                AI analyzing response&hellip;
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* Trusted by / logo marquee */}
-      <section className="logos-section" data-observe id="logos">
-        <div className="logos-label">Trusted by candidates who now work at</div>
-        <div className="marquee">
-          <div className="marquee-track">
-            {[...LOGOS, ...LOGOS].map((name, i) => (
-              <span key={i} className="logo-pill">{name}</span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Workflow */}
-      <section id="workflow" className="section" data-observe ref={workflowRef}>
-        <div className="section-header">
-          <h2 className="section-title">Three steps, start to feedback</h2>
-          <p className="section-subtitle">From interview setup to detailed feedback, AI handles the process so you can focus on improving.</p>
-        </div>
-
-        <div className="timeline">
-          <motion.div className="timeline-line" style={{ scaleY: smoothLine }} aria-hidden="true" />
-          {WORKFLOW.map((item, idx) => {
-            const Icon = item.icon;
-            const progress = idx === 0 ? smoothStep1 : idx === 1 ? smoothStep2 : smoothStep3;
-            const glow = idx === 0 ? step1Glow : idx === 1 ? step2Glow : step3Glow;
-            return (
-              <motion.div key={item.step} className="timeline-item" style={{ opacity: progress }}>
-                <motion.div
-                  className="timeline-node"
-                  style={{
-                    opacity: progress,
-                    scale: stepNodeScale[idx],
-                    boxShadow: glow,
-                  }}
-                >
-                  <Icon size={20} aria-hidden="true" />
-                </motion.div>
-                <motion.div
-                  className="timeline-card"
-                  style={{
-                    opacity: progress,
-                    x: stepCardX[idx],
-                    scale: stepCardScale[idx],
-                  }}
-                >
-                  <div className="step-label">{item.step}</div>
-                  <h3 className="card-title">{item.title}</h3>
-                  <p className="card-description">{item.description}</p>
-                </motion.div>
+      <main>
+        <section className="hero">
+          <div className="hero-grid">
+            <motion.div
+              className="hero-copy"
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              <motion.div className="eyebrow-pill" variants={itemVariants}>
+                <Sparkles size={14} aria-hidden="true" />
+                AI mock interviews with real follow-up pressure
               </motion.div>
-            );
-          })}
-        </div>
-      </section>
+              <motion.h1 variants={itemVariants}>
+                Practice the interview, not just the question list.
+              </motion.h1>
+              <motion.p className="hero-lede" variants={itemVariants}>
+                A premium interview workspace for candidates who want realistic voice practice,
+                adaptive prompts, and feedback that turns every answer into a sharper next attempt.
+              </motion.p>
+              <motion.div className="hero-actions" variants={itemVariants}>
+                <button type="button" className="solid-button hero-button" onClick={goToSetup}>
+                  <Play size={17} aria-hidden="true" />
+                  <span>Start mock interview</span>
+                </button>
+                <button type="button" className="outline-button hero-button" onClick={goToHistory}>
+                  <Clock size={17} aria-hidden="true" />
+                  <span>View history</span>
+                </button>
+              </motion.div>
+              <motion.div className="hero-assurance" variants={itemVariants}>
+                <span><CheckCircle2 size={15} aria-hidden="true" /> Role-based setup</span>
+                <span><CheckCircle2 size={15} aria-hidden="true" /> Voice-native sessions</span>
+                <span><CheckCircle2 size={15} aria-hidden="true" /> Private review</span>
+              </motion.div>
+            </motion.div>
 
-      {/* Capabilities */}
-      <section id="capabilities" className="section section-alt" data-observe>
-        <div className="section-header">
-          <h2 className="section-title">Advanced <span className="highlight">AI</span> capabilities</h2>
-        </div>
+            <motion.div
+              className="interview-workspace"
+              initial={{ opacity: 0, y: 28, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.18 }}
+            >
+              <div className="workspace-topbar">
+                <div>
+                  <span className="workspace-kicker">Live room</span>
+                  <h2>Frontend systems interview</h2>
+                </div>
+                <span className="live-status"><span /> Listening</span>
+              </div>
 
-        <div className={`capabilities-grid ${revealClass('capabilities')}`}>
-          {CAPABILITIES.map((capability, idx) => {
-            const Icon = capability.icon;
-            return (
-              <div key={capability.title} className="capability-card" style={{ transitionDelay: `${idx * 80}ms` }}>
-                <div className="capability-card-inner">
-                  <div className="capability-card-face capability-card-front">
-                    <div className="capability-card-media">
-                      <img src={capability.image} alt={capability.title} className="capability-card-image" />
+              <div className="workspace-body">
+                <div className="question-panel">
+                  <div className="panel-label"><Brain size={14} aria-hidden="true" /> Current prompt</div>
+                  <p>Walk me through how you would design a rate limiter for a high-traffic API.</p>
+                </div>
+
+                <div className="voice-panel">
+                  <div className="voice-header">
+                    <div>
+                      <div className="panel-label"><Mic size={14} aria-hidden="true" /> Voice answer</div>
+                      <span>01:42 elapsed</span>
                     </div>
-                    <h3 className="capability-card-title">{capability.title}</h3>
+                    <button type="button" className="icon-button" aria-label="Microphone active">
+                      <Mic size={18} aria-hidden="true" />
+                    </button>
                   </div>
-                  <div className="capability-card-face capability-card-back">
-                    <div className="capability-card-icon capability-card-icon-back">
-                      <Icon size={28} aria-hidden="true" />
-                    </div>
-                    <h3 className="capability-card-title capability-card-title-back">{capability.title}</h3>
-                    <p className="capability-card-description capability-card-description-back">{capability.description}</p>
+                  <div className="waveform" aria-hidden="true">
+                    {waveBars.map((height, index) => (
+                      <span key={index} style={{ '--height': `${height}%`, animationDelay: `${index * 0.045}s` }} />
+                    ))}
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
 
-      {/* Product showcase */}
-      <section className="section" data-observe id="product">
-        <div className="section-header">
-          <h2 className="section-title">See it in action</h2>
-        </div>
-
-        <div className="showcase">
-          <div className="glass-card showcase-main">
-            <div className="console-top">
-              <div className="console-dots"><span /><span /><span /></div>
-              <div className="console-title">AI interviewer</div>
-              <div className="console-timer"><Clock size={13} aria-hidden="true" /> 01:42</div>
-            </div>
-            <div className="console-body">
-              <div className="console-question">
-                <div className="eyebrow">Question</div>
-                <p>&ldquo;Walk me through how you would design a rate limiter.&rdquo;</p>
-              </div>
-              <div className="console-transcript">
-                <div className="eyebrow"><MessageSquare size={12} style={{ marginRight: 4, verticalAlign: '-2px' }} aria-hidden="true" />Your response</div>
-                <p>&ldquo;I&rsquo;d start with a token bucket per client, backed by a shared store for consistency across nodes&hellip;&rdquo;</p>
-              </div>
-              <div className="thinking-row">
-                <span className="status-dot" aria-hidden="true" /> Listening&hellip;
-              </div>
-            </div>
-          </div>
-
-          <aside className="glass-card showcase-sidebar">
-            <div className="eyebrow" style={{ marginBottom: 16 }}>Feedback</div>
-            {[
-              { label: 'Technical depth', value: 86 },
-              { label: 'Communication', value: 91 },
-              { label: 'Structure', value: 78 },
-            ].map((m) => (
-              <div key={m.label} className="meter-row">
-                <div className="meter-label"><span>{m.label}</span><span>{m.value}%</span></div>
-                <div className="meter-track">
-                  <div className="meter-fill" style={{ width: visibleSections.product ? `${m.value}%` : '0%' }} />
+                <div className="transcript-panel">
+                  <div className="panel-label"><MessageSquare size={14} aria-hidden="true" /> Live transcript</div>
+                  <p>{transcript}<span className="caret" /></p>
                 </div>
               </div>
-            ))}
-            <div className="confidence-badge">
-              <TrendingUp size={16} aria-hidden="true" />
-              Confidence trending up this session
-            </div>
-          </aside>
-        </div>
-      </section>
 
-      {/* Stats */}
-      <section className="section stats-section" data-observe id="stats">
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-number">{counts.interviews.toLocaleString()}+</div>
-            <div className="stat-label">Interviews completed</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-number">{counts.questions}+</div>
-            <div className="stat-label">Adaptive question types</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-number">{counts.accuracy}%</div>
-            <div className="stat-label">Feedback accuracy rating</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-number">{counts.hours}/7</div>
-            <div className="stat-label">Available to practice</div>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="section section-alt" data-observe id="testimonials">
-        <div className="section-header">
-          <h2 className="section-title">Candidates who practiced their way in</h2>
-        </div>
-        <div className={`testimonial-grid ${revealClass('testimonials')}`}>
-          {TESTIMONIALS.map((t, idx) => (
-            <div key={t.name} className="testimonial-card" style={{ transitionDelay: `${idx * 90}ms` }}>
-              <div className="stars">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} size={14} fill={i < t.rating ? '#10b981' : 'none'} color="#10b981" aria-hidden="true" />
+              <div className="score-strip">
+                {METERS.map((meter) => (
+                  <div key={meter.label} className="mini-meter">
+                    <div className="mini-meter-label">
+                      <span>{meter.label}</span>
+                      <strong>{meter.value}%</strong>
+                    </div>
+                    <div className="mini-meter-track">
+                      <span style={{ width: `${meter.value}%` }} />
+                    </div>
+                  </div>
                 ))}
               </div>
-              <p className="testimonial-quote">&ldquo;{t.quote}&rdquo;</p>
-              <div className="testimonial-person">
-                <span className="avatar">{t.initials}</span>
-                <div>
-                  <div className="testimonial-name">{t.name}</div>
-                  <div className="testimonial-role">{t.role}</div>
+            </motion.div>
+          </div>
+        </section>
+
+        <section id="features" className="section feature-section" data-observe>
+          <div className="section-heading split">
+            <div>
+              <span className="section-kicker">Practice stack</span>
+              <h2>Everything on the page moves the candidate toward a better answer.</h2>
+            </div>
+            <p>
+              See the interview environment before you commit to a session: prompts, voice state,
+              transcript quality, and feedback are all part of one focused practice flow.
+            </p>
+          </div>
+
+          <div className={`feature-grid ${visibleSections.features ? 'is-visible' : ''}`}>
+            {FEATURE_CARDS.map((feature, index) => {
+              const Icon = feature.icon;
+              return (
+                <article key={feature.title} className={`feature-card accent-${feature.accent}`} style={{ transitionDelay: `${index * 90}ms` }}>
+                  <div className="feature-icon"><Icon size={22} aria-hidden="true" /></div>
+                  <h3>{feature.title}</h3>
+                  <p>{feature.description}</p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section id="workflow" className="section workflow-section" data-observe>
+          <div className="section-heading centered">
+            <span className="section-kicker">Interview flow</span>
+            <h2>From setup to review in one clear loop.</h2>
+            <p>Each step is designed to reduce ambiguity: choose the room, answer naturally, then review what to improve.</p>
+          </div>
+
+          <div className={`workflow-grid ${visibleSections.workflow ? 'is-visible' : ''}`}>
+            {WORKFLOW.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <article key={item.step} className="workflow-card" style={{ transitionDelay: `${index * 120}ms` }}>
+                  <div className="workflow-index">{item.step}</div>
+                  <div className="workflow-icon"><Icon size={22} aria-hidden="true" /></div>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section id="capabilities" className="section capabilities-section" data-observe>
+          <div className="section-heading split">
+            <div>
+              <span className="section-kicker">AI capabilities</span>
+              <h2>A richer view of what the platform can do.</h2>
+            </div>
+            <p>
+              The platform combines adaptive prompts, role-specific setup, voice practice,
+              and post-session review into one candidate-ready workflow.
+            </p>
+          </div>
+
+          <div className={`capability-grid ${visibleSections.capabilities ? 'is-visible' : ''}`}>
+            {CAPABILITIES.map((capability, index) => {
+              const Icon = capability.icon;
+              return (
+                <article key={capability.title} className="capability-card" style={{ transitionDelay: `${index * 80}ms` }}>
+                  <div className="capability-media">
+                    <img src={capability.image} alt="" />
+                  </div>
+                  <div className="capability-copy">
+                    <span><Icon size={16} aria-hidden="true" /> {capability.title}</span>
+                    <p>{capability.description}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="section review-section" data-observe id="review">
+          <div className="review-card">
+            <div className="review-copy">
+              <span className="section-kicker">Feedback surface</span>
+              <h2>Make the next answer easier to improve.</h2>
+              <p>
+                Feedback is organized around the parts of an answer candidates can actually improve:
+                structure, technical depth, clarity, and follow-through.
+              </p>
+              <div className="review-points">
+                <span><MousePointer2 size={16} aria-hidden="true" /> Clear primary action</span>
+                <span><ShieldCheck size={16} aria-hidden="true" /> Privacy-forward positioning</span>
+                <span><BarChart3 size={16} aria-hidden="true" /> Scannable review metrics</span>
+              </div>
+            </div>
+
+            <div className="feedback-panel">
+              <div className="feedback-header">
+                <span>Session review</span>
+                <span className="review-badge"><TrendingUp size={14} aria-hidden="true" /> Improving</span>
+              </div>
+              {METERS.map((meter) => (
+                <div key={meter.label} className="feedback-meter">
+                  <div>
+                    <span>{meter.label}</span>
+                    <strong>{meter.value}%</strong>
+                  </div>
+                  <div className="feedback-track">
+                    <span style={{ width: visibleSections.review ? `${meter.value}%` : '0%' }} />
+                  </div>
                 </div>
+              ))}
+              <div className="feedback-note">
+                <LockKeyhole size={16} aria-hidden="true" />
+                Session recordings and transcripts stay tied to the candidate account.
               </div>
             </div>
-          ))}
-        </div>
-      </section>
+          </div>
+        </section>
 
-      {/* Why choose us / About */}
-      <section id="about" className="section" data-observe>
-        <div className="section-header">
-          <h2 className="section-title">Why candidates choose InterviewAI</h2>
-          <p className="section-subtitle">Not a question bank. A practice partner that gets sharper the more you use it.</p>
-        </div>
-        <div className={`why-grid ${revealClass('about')}`}>
-          {[
-            { icon: Award, title: 'Built by ex-interviewers', desc: 'Question design informed by real hiring loops at top tech companies.' },
-            { icon: Users, title: 'Practiced by thousands', desc: 'A growing base of candidates across SWE, ML, and product roles.' },
-            { icon: ShieldCheck, title: 'Private, always', desc: 'Your sessions are never shared or used to train public models.' },
-          ].map((w, idx) => {
-            const Icon = w.icon;
-            return (
-              <div key={w.title} className="why-card" style={{ transitionDelay: `${idx * 90}ms` }}>
-                <Icon size={24} className="capability-icon" aria-hidden="true" />
-                <h3 className="capability-title">{w.title}</h3>
-                <p className="capability-description">{w.desc}</p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="section section-alt" data-observe id="faq">
-        <div className="section-header">
-          <h2 className="section-title">Frequently asked questions</h2>
-        </div>
-        <div className="faq-list">
-          {FAQS.map((item, idx) => (
-            <div key={item.q} className={`faq-item ${openFaq === idx ? 'faq-open' : ''}`}>
-              <button
-                type="button"
-                className="faq-question"
-                onClick={() => setOpenFaq(openFaq === idx ? -1 : idx)}
-                aria-expanded={openFaq === idx}
-              >
-                {item.q}
-                <ChevronDown size={18} className="faq-chevron" aria-hidden="true" />
-              </button>
-              <div className="faq-answer"><p>{item.a}</p></div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Final CTA */}
-      <section className="cta-section" data-observe id="cta">
-        <div className="blob blob-c" aria-hidden="true" />
-        <div className="noise-overlay" aria-hidden="true" />
-        <h2 className="cta-title">Your next interview starts here.</h2>
-        <p className="cta-description">
-          Stop guessing how you&rsquo;ll perform. Practice with AI, learn from every answer, and
-          walk into your next interview prepared.
-        </p>
-        <button type="button" className="btn-primary btn-primary-lg btn-icon-button" onMouseMove={handleMagnetic} onMouseLeave={resetMagnetic} onClick={() => navigate('/interview/setup')}>
-          <span>Start practicing</span>
-          <ArrowRight size={18} className="btn-arrow" aria-hidden="true" />
-        </button>
-      </section>
-
-      {/* Footer */}
-      <footer className="footer">
-        <div className="footer-content">
-          <div className="footer-brand">
-            <div className="footer-logo">
-              <span className="logo-badge"><Zap size={16} color="#ffffff" aria-hidden="true" /></span>
-              <span>InterviewAI</span>
-            </div>
-            <p className="footer-tagline">Practice smarter. Interview better.</p>
+        <section id="faq" className="section faq-section" data-observe>
+          <div className="section-heading centered">
+            <span className="section-kicker">Questions</span>
+            <h2>What candidates usually want to know.</h2>
           </div>
 
-          <div className="footer-col">
-            <div className="footer-col-title">Product</div>
-            {navItems.map((item) => (
-              <a key={item.href} href={item.href} className="footer-link">{item.label}</a>
+          <div className="faq-list">
+            {FAQS.map((item, index) => (
+              <article key={item.q} className={`faq-item ${openFaq === index ? 'is-open' : ''}`}>
+                <button
+                  type="button"
+                  onClick={() => setOpenFaq(openFaq === index ? -1 : index)}
+                  aria-expanded={openFaq === index}
+                >
+                  <span>{item.q}</span>
+                  <ChevronDown size={18} aria-hidden="true" />
+                </button>
+                <div className="faq-answer">
+                  <p>{item.a}</p>
+                </div>
+              </article>
             ))}
-            <a href="#history" className="footer-link">History</a>
           </div>
+        </section>
 
-          <div className="footer-col">
-            <div className="footer-col-title">Company</div>
-            <a href="#about" className="footer-link">About</a>
-            <a href="#testimonials" className="footer-link">Testimonials</a>
-            <a href="#faq" className="footer-link">FAQ</a>
+        <section className="final-cta">
+          <div>
+            <span className="section-kicker">Ready room</span>
+            <h2>Run the practice interview before the real one runs you.</h2>
+            <p>Start a role-calibrated session, answer out loud, and leave with a cleaner practice plan.</p>
+          </div>
+          <button type="button" className="solid-button hero-button" onClick={goToSetup}>
+            <span>Start practicing</span>
+            <ArrowRight size={18} aria-hidden="true" />
+          </button>
+        </section>
+      </main>
+
+      <footer className="footer">
+        <div className="footer-brand">
+          <span className="brand-mark"><Zap size={16} aria-hidden="true" /></span>
+          <div>
+            <strong>InterviewAI</strong>
+            <p>Practice smarter. Interview better.</p>
           </div>
         </div>
-
-        <div className="footer-bottom">
-          <p>&copy; 2026 InterviewAI. All rights reserved.</p>
+        <div className="footer-links">
+          {NAV_ITEMS.map((item) => (
+            <a key={item.href} href={item.href}>{item.label}</a>
+          ))}
+          <button type="button" onClick={goToHistory}>History</button>
         </div>
       </footer>
 
       <style>{`
         :root {
-          --g-950: #052e1c;
-          --g-900: #064e3b;
-          --g-800: #065f46;
-          --g-700: #047857;
-          --g-600: #059669;
-          --g-500: #10b981;
-          --g-400: #34d399;
-          --g-300: #6ee7b7;
-          --g-100: #d1fae5;
-          --g-50: #ecfdf5;
-          --ink: #0a1f17;
-          --gray: #5b6b64;
-          --gray-light: #8a978f;
-          --line: #e3ece7;
-          --white: #ffffff;
+          --ink: #111827;
+          --muted: #5b6472;
+          --soft: #f6f8fb;
+          --panel: #ffffff;
+          --line: #dfe6ee;
+          --line-strong: #cbd5e1;
+          --emerald: #10b981;
+          --emerald-dark: #047857;
+          --teal-ink: #073b3a;
+          --amber: #f59e0b;
+          --blue: #2563eb;
+          --rose: #e11d48;
+          --shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+          --radius: 8px;
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
         body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+          margin: 0;
           color: var(--ink);
-          background-color: var(--white);
+          background:
+            linear-gradient(90deg, rgba(17,24,39,0.035) 1px, transparent 1px),
+            linear-gradient(180deg, rgba(17,24,39,0.035) 1px, transparent 1px),
+            #f8fafc;
+          background-size: 44px 44px;
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
-        button { font-family: inherit; }
-        a { color: inherit; }
+        button, a { font: inherit; }
+        button { cursor: pointer; }
+        a { color: inherit; text-decoration: none; }
 
-        /* ---------- Keyframes ---------- */
-        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-12px); } }
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes slideInDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        @keyframes wordIn { from { opacity: 0; transform: translateY(18px) rotateX(40deg); } to { opacity: 1; transform: translateY(0) rotateX(0); } }
-        @keyframes waveform { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-        @keyframes dotBounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-5px); opacity: 1; } }
-        @keyframes blobDrift { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(20px, -30px) scale(1.08); } }
-        @keyframes marqueeScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        @keyframes wave {
+          0%, 100% { transform: scaleY(0.38); opacity: 0.55; }
+          50% { transform: scaleY(1); opacity: 1; }
+        }
+        @keyframes caret {
+          0%, 45% { opacity: 1; }
+          46%, 100% { opacity: 0; }
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(0.72); opacity: 0.55; }
+        }
 
-        /* ---------- Layout helpers ---------- */
-        .section { padding: 120px 40px; max-width: 1320px; margin: 0 auto; }
-        .section-alt { background: var(--g-50); max-width: 100%; padding: 120px 40px; }
-        .section-alt > * { max-width: 1320px; margin-left: auto; margin-right: auto; }
-        .section-header { text-align: center; margin-bottom: 72px; }
-        .section-title { font-size: clamp(32px, 4vw, 44px); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 16px; color: var(--ink); }
-        .section-subtitle { font-size: 17px; color: var(--gray); max-width: 600px; margin: 0 auto; line-height: 1.6; }
-        .highlight { background: linear-gradient(120deg, var(--g-600), var(--g-400)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--g-600); display: flex; align-items: center; margin-bottom: 8px; }
-        .reveal { opacity: 1; }
-        .reveal-visible .feature-card,
-        .reveal-visible .capability-card,
-        .reveal-visible .testimonial-card,
-        .reveal-visible .timeline-item,
-        .reveal-visible .why-card { opacity: 1; transform: translateY(0); }
+        .landing-page {
+          min-height: 100vh;
+          overflow-x: hidden;
+          background:
+            radial-gradient(circle at 16% 0%, rgba(16,185,129,0.18), transparent 31rem),
+            radial-gradient(circle at 82% 15%, rgba(245,158,11,0.12), transparent 28rem),
+            transparent;
+        }
 
-        /* ---------- Navbar ---------- */
         .navbar {
-          position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-          background: rgba(255,255,255,0.72);
-          backdrop-filter: blur(16px) saturate(160%);
-          -webkit-backdrop-filter: blur(16px) saturate(160%);
-          border-bottom: 1px solid rgba(6,95,70,0.08);
-          transition: box-shadow 0.3s ease, background 0.3s ease;
+          position: fixed;
+          inset: 0 0 auto;
+          z-index: 50;
+          border-bottom: 1px solid rgba(203,213,225,0.55);
+          background: rgba(248,250,252,0.78);
+          backdrop-filter: blur(18px);
+          transition: box-shadow 0.25s ease, background 0.25s ease;
         }
-        .navbar-scrolled { box-shadow: 0 8px 30px rgba(5,46,28,0.08); background: rgba(255,255,255,0.9); }
-        .logo-badge {
-          width: 30px; height: 30px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
-          background: linear-gradient(135deg, var(--g-500), var(--g-700)); box-shadow: 0 4px 14px rgba(16,185,129,0.35);
-          margin-right: 10px;
+        .navbar-scrolled {
+          background: rgba(255,255,255,0.92);
+          box-shadow: 0 14px 42px rgba(15,23,42,0.08);
         }
-        .nav-link { text-decoration: none; color: var(--gray); font-size: 14px; font-weight: 500; position: relative; padding: 4px 2px; transition: color 0.2s; }
-        .nav-link::after { content: ''; position: absolute; left: 0; bottom: -2px; width: 0; height: 2px; background: var(--g-500); transition: width 0.25s ease; }
-        .nav-link:hover { color: var(--ink); }
-        .nav-link:hover::after { width: 100%; }
-
-        .btn-login { background: transparent; border: 1px solid var(--line); padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--ink); transition: all 0.2s; }
-        .btn-login:hover { background: var(--g-50); border-color: var(--g-300); }
-        .btn-cta { background: linear-gradient(135deg, var(--g-500), var(--g-700)); border: none; padding: 9px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: white; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 14px rgba(16,185,129,0.3); }
-        .btn-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(16,185,129,0.4); }
-
-        .btn-primary {
-          background: linear-gradient(135deg, var(--g-500), var(--g-700)); border: none; padding: 15px 34px; border-radius: 10px;
-          cursor: pointer; font-size: 16px; font-weight: 700; color: white; box-shadow: 0 10px 30px rgba(16,185,129,0.35);
-          transition: transform 0.15s ease, box-shadow 0.2s ease;
+        .nav-shell {
+          width: min(1180px, calc(100% - 40px));
+          min-height: 72px;
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          gap: 28px;
         }
-        .btn-primary:hover { box-shadow: 0 14px 36px rgba(16,185,129,0.45); }
-        .btn-primary-lg { padding: 18px 42px; font-size: 17px; }
-        .btn-icon-button {
+        .brand,
+        .footer-brand {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          font-weight: 800;
+          letter-spacing: 0;
+        }
+        .brand-mark {
+          width: 32px;
+          height: 32px;
+          display: inline-grid;
+          place-items: center;
+          color: #fff;
+          border-radius: var(--radius);
+          background: linear-gradient(135deg, var(--teal-ink), var(--emerald));
+          box-shadow: 0 12px 24px rgba(16,185,129,0.24);
+          flex: 0 0 auto;
+        }
+        .nav-links {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-left: auto;
+          padding: 5px;
+          border: 1px solid rgba(203,213,225,0.7);
+          border-radius: var(--radius);
+          background: rgba(255,255,255,0.65);
+        }
+        .nav-links a {
+          padding: 8px 12px;
+          border-radius: 6px;
+          color: var(--muted);
+          font-size: 14px;
+          font-weight: 650;
+          transition: color 0.2s ease, background 0.2s ease;
+        }
+        .nav-links a:hover {
+          color: var(--ink);
+          background: #fff;
+        }
+        .nav-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .ghost-button,
+        .outline-button,
+        .solid-button {
+          min-height: 42px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          gap: 9px;
+          border-radius: var(--radius);
+          border: 1px solid var(--line);
+          padding: 0 17px;
+          font-weight: 750;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+          white-space: nowrap;
+        }
+        .ghost-button {
+          background: rgba(255,255,255,0.68);
+          color: var(--ink);
+        }
+        .outline-button {
+          background: rgba(255,255,255,0.74);
+          color: var(--ink);
+        }
+        .solid-button {
+          border-color: transparent;
+          color: #fff;
+          background: linear-gradient(135deg, var(--teal-ink), var(--emerald-dark) 52%, var(--emerald));
+          box-shadow: 0 14px 32px rgba(4,120,87,0.28);
+        }
+        .solid-button:hover,
+        .outline-button:hover,
+        .ghost-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 16px 32px rgba(15,23,42,0.12);
+        }
+        .solid-button.small {
+          min-height: 40px;
+          padding: 0 15px;
+          font-size: 14px;
+        }
+        .menu-button {
+          display: none;
+          margin-left: auto;
+          width: 42px;
+          height: 42px;
+          border: 1px solid var(--line);
+          border-radius: var(--radius);
+          background: #fff;
+          color: var(--ink);
+          align-items: center;
+          justify-content: center;
+        }
+        .mobile-menu {
+          display: none;
+        }
+
+        main { padding-top: 72px; }
+        .hero {
+          width: min(1180px, calc(100% - 40px));
+          margin: 0 auto;
+          padding: 72px 0 84px;
+        }
+        .hero-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+          gap: 54px;
+          align-items: center;
+          min-height: calc(100vh - 130px);
+        }
+        .hero-copy h1 {
+          margin: 18px 0 22px;
+          max-width: 720px;
+          font-size: clamp(44px, 6.4vw, 78px);
+          line-height: 0.96;
+          letter-spacing: 0;
+        }
+        .hero-lede {
+          max-width: 610px;
+          color: var(--muted);
+          font-size: 18px;
+          line-height: 1.75;
+          margin: 0;
+        }
+        .eyebrow-pill,
+        .section-kicker,
+        .panel-label {
+          display: inline-flex;
+          align-items: center;
           gap: 8px;
-          line-height: 1;
+          color: var(--emerald-dark);
+          font-size: 12px;
+          font-weight: 850;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
         }
-        .btn-arrow {
-          flex-shrink: 0;
-          display: inline-block;
-          vertical-align: middle;
+        .eyebrow-pill {
+          padding: 9px 12px;
+          border: 1px solid rgba(16,185,129,0.24);
+          border-radius: 999px;
+          background: rgba(236,253,245,0.9);
         }
-        .btn-secondary {
-          background: white; border: 1px solid var(--line); padding: 15px 34px; border-radius: 10px; cursor: pointer;
-          font-size: 16px; font-weight: 700; color: var(--ink); box-shadow: 0 2px 10px rgba(5,46,28,0.06); transition: transform 0.15s ease, border-color 0.2s;
+        .hero-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin: 34px 0 22px;
         }
-        .btn-secondary:hover { border-color: var(--g-400); }
-
-        .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; color: var(--ink); padding: 4px; }
-        .mobile-menu { display: none; }
-        @media (max-width: 768px) {
-          .nav-links, .nav-buttons { display: none !important; }
-          .mobile-menu-btn { display: block !important; }
-          .mobile-menu { display: flex !important; flex-direction: column; padding: 16px 24px 24px; gap: 4px; border-top: 1px solid var(--line); background: rgba(255,255,255,0.98); }
-          .mobile-menu-link { padding: 12px 0; text-decoration: none; color: var(--ink); font-size: 15px; font-weight: 500; border-bottom: 1px solid var(--g-50); }
-          .mobile-menu-buttons { display: flex; gap: 12px; margin-top: 16px; }
-          .mobile-menu-buttons button { flex: 1; }
+        .hero-button {
+          min-height: 52px;
+          padding: 0 22px;
+          font-size: 15px;
         }
-
-        /* ---------- Backgrounds ---------- */
-        .blob { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.5; pointer-events: none; z-index: 0; animation: blobDrift 12s ease-in-out infinite; }
-        .blob-a { width: 480px; height: 480px; background: radial-gradient(circle, var(--g-300), transparent 70%); top: -120px; left: -140px; }
-        .blob-b { width: 420px; height: 420px; background: radial-gradient(circle, var(--g-500), transparent 70%); top: 60px; right: -160px; animation-delay: 2s; }
-        .blob-c { position: absolute; inset: 0; margin: auto; width: 600px; height: 600px; background: radial-gradient(circle, var(--g-400), transparent 70%); filter: blur(90px); opacity: 0.35; animation: blobDrift 14s ease-in-out infinite; }
-        .noise-overlay {
-          position: absolute; inset: 0; pointer-events: none; opacity: 0.035; mix-blend-mode: multiply; z-index: 0;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        .hero-assurance {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 700;
         }
-
-        .glass-card {
-          background: rgba(255,255,255,0.72);
-          backdrop-filter: blur(18px) saturate(160%);
-          -webkit-backdrop-filter: blur(18px) saturate(160%);
-          border: 1px solid rgba(255,255,255,0.6);
-          box-shadow: 0 20px 60px rgba(5,46,28,0.12), inset 0 1px 0 rgba(255,255,255,0.8);
+        .hero-assurance span {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
         }
+        .hero-assurance svg { color: var(--emerald-dark); }
 
-        /* ---------- Hero ---------- */
-        .hero-badge { animation: slideInDown 0.7s ease 0.1s both; text-align: center; margin-bottom: 24px; position: relative; z-index: 1; }
-        .badge {
-          display: inline-block; background: var(--g-50); color: var(--g-700); padding: 9px 18px; border-radius: 20px;
-          font-size: 12px; font-weight: 700; letter-spacing: 0.02em; border: 1px solid var(--g-100);
+        .interview-workspace,
+        .review-card,
+        .final-cta {
+          border: 1px solid rgba(203,213,225,0.78);
+          border-radius: var(--radius);
+          background: rgba(255,255,255,0.82);
+          box-shadow: var(--shadow);
+          backdrop-filter: blur(18px);
         }
-        .hero-title {
-          font-size: clamp(40px, 6vw, 64px); font-weight: 800; line-height: 1.12; letter-spacing: -0.03em; text-align: center;
-          margin-bottom: 24px; color: var(--ink); position: relative; z-index: 1; perspective: 400px;
-        }
-        .word-reveal { display: inline-block; opacity: 0; animation: wordIn 0.7s cubic-bezier(0.2,0.8,0.2,1) forwards; }
-        .hero-description {
-          font-size: 18px; color: var(--gray); line-height: 1.65; max-width: 600px; margin: 0 auto 32px; text-align: center;
-          animation: slideInDown 0.8s ease 0.5s both; position: relative; z-index: 1;
-        }
-        .trust-line { font-size: 13px; color: var(--gray-light); text-align: center; margin-bottom: 80px; animation: slideInDown 0.8s ease 0.6s both; position: relative; z-index: 1; }
-
-        .console-wrap { position: relative; max-width: 760px; margin: 0 auto; z-index: 1; }
-        .console { border-radius: 20px; overflow: hidden; animation: fadeInUp 0.9s ease 0.3s both; }
-        .console-top { display: flex; align-items: center; gap: 14px; padding: 16px 22px; border-bottom: 1px solid rgba(6,95,70,0.08); }
-        .console-dots { display: flex; gap: 6px; }
-        .console-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--g-300); }
-        .console-title { font-size: 13px; font-weight: 700; color: var(--ink); flex: 1; }
-        .console-timer { font-size: 13px; font-weight: 700; color: var(--g-600); display: flex; align-items: center; gap: 5px; }
-        .console-body { padding: 26px 26px 24px; }
-        .console-question p { font-size: 17px; font-weight: 600; color: var(--ink); line-height: 1.5; }
-
-        .waveform { display: flex; align-items: center; gap: 3px; height: 46px; margin: 20px 0; }
-        .wave-bar { flex: 1; max-width: 5px; height: var(--h); background: linear-gradient(180deg, var(--g-400), var(--g-600)); border-radius: 3px; animation: waveform 1.1s ease-in-out infinite; }
-
-        .console-transcript { background: var(--g-50); border-left: 3px solid var(--g-500); border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; min-height: 66px; }
-        .console-transcript p { font-size: 14px; color: var(--ink); line-height: 1.6; }
-        .caret { display: inline-block; width: 2px; height: 14px; background: var(--g-600); margin-left: 2px; animation: blink 0.9s step-end infinite; vertical-align: middle; }
-
-        .thinking-row { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--gray); font-weight: 500; }
-        .thinking-dots { display: inline-flex; gap: 3px; }
-        .thinking-dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--g-500); animation: dotBounce 1.2s infinite; }
-        .thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
-        .thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--g-500); display: inline-block; animation: pulse 2s infinite; }
-
-        .ring-svg { width: 46px; height: 46px; transform: rotate(-90deg); }
-        .ring-track { fill: none; stroke: var(--g-100); stroke-width: 7; }
-        .ring-fill { fill: none; stroke: var(--g-500); stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 1.4s cubic-bezier(0.2,0.8,0.2,1); }
-
-        /* ---------- Logos marquee ---------- */
-        .logos-section { padding: 60px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
-        .logos-label { text-align: center; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gray-light); margin-bottom: 24px; }
-        .marquee { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent); mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent); }
-        .marquee-track { display: flex; gap: 48px; width: max-content; animation: marqueeScroll 22s linear infinite; }
-        .logo-pill { font-size: 15px; font-weight: 700; color: var(--gray-light); letter-spacing: -0.01em; white-space: nowrap; }
-
-        /* ---------- Bento features ---------- */
-        .bento { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 190px; gap: 22px; }
-        .feature-card {
-          background: white; border: 1px solid var(--line); border-radius: 18px; padding: 28px; display: flex; flex-direction: column; justify-content: flex-end;
-          opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.15s ease, border-color 0.2s, box-shadow 0.2s; will-change: transform;
-        }
-        .feature-card:hover { border-color: var(--g-300); box-shadow: 0 20px 40px rgba(5,46,28,0.1); }
-        .feature-lg { grid-column: span 2; grid-row: span 2; }
-        .feature-md { grid-column: span 2; }
-        .feature-sm { grid-column: span 2; }
-        .feature-icon { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--g-500), var(--g-700)); color: white; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 6px 16px rgba(16,185,129,0.3); }
-        .feature-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--ink); }
-        .feature-description { font-size: 14px; color: var(--gray); line-height: 1.6; }
-        @media (max-width: 900px) {
-          .bento { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 180px; }
-          .feature-lg { grid-column: span 2; grid-row: span 1; }
-          .feature-md, .feature-sm { grid-column: span 1; }
-        }
-        @media (max-width: 560px) {
-          .bento { grid-template-columns: 1fr; }
-          .feature-lg, .feature-md, .feature-sm { grid-column: span 1; }
-        }
-
-        /* ---------- Timeline ---------- */
-        .timeline { position: relative; display: flex; flex-direction: column; gap: 48px; max-width: 780px; margin: 0 auto; }
-        .timeline-line { position: absolute; left: 27px; top: 10px; bottom: 10px; width: 2px; background: linear-gradient(180deg, var(--g-500), var(--g-100)); transform-origin: top; }
-        .timeline-item { display: flex; gap: 24px; align-items: flex-start; }
-        .timeline-node {
-          width: 56px; height: 56px; min-width: 56px; border-radius: 16px; background: white; border: 1px solid var(--g-100);
-          display: flex; align-items: center; justify-content: center; color: var(--g-600); position: relative; z-index: 1;
-        }
-        .timeline-card { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 26px 28px; flex: 1; }
-        .timeline-item:hover .timeline-card { box-shadow: 0 16px 36px rgba(5,46,28,0.1); transform: translateY(-3px); }
-        .step-label { font-size: 12px; font-weight: 800; color: var(--g-500); letter-spacing: 0.08em; margin-bottom: 10px; }
-        .card-title { font-size: 19px; font-weight: 700; margin-bottom: 10px; color: var(--ink); }
-        .card-description { font-size: 15px; color: var(--gray); line-height: 1.6; }
-
-        /* ---------- Capabilities ---------- */
-        .capabilities-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 24px; }
-        .capability-card { perspective: 1200px; }
-        .capability-card-inner {
+        .interview-workspace {
+          overflow: hidden;
           position: relative;
-          width: 100%;
-          min-height: 280px;
-          transform-style: preserve-3d;
-          transition: transform 1.45s cubic-bezier(0.22, 1, 0.36, 1);
-          will-change: transform;
         }
-        .capabilities-grid > .capability-card:nth-child(1) { grid-column: 1 / span 2; }
-        .capabilities-grid > .capability-card:nth-child(2) { grid-column: 3 / span 2; }
-        .capabilities-grid > .capability-card:nth-child(3) { grid-column: 5 / span 2; }
-        .capabilities-grid > .capability-card:nth-child(4) { grid-column: 2 / span 2; }
-        .capabilities-grid > .capability-card:nth-child(5) { grid-column: 4 / span 2; }
-        .capability-card:hover .capability-card-inner {
-          transform: rotateY(180deg);
-        }
-        .capability-card:hover { transform: translateY(-3px); }
-        .capability-card-face {
+        .interview-workspace::before {
+          content: "";
           position: absolute;
           inset: 0;
-          border-radius: 24px;
+          pointer-events: none;
+          background:
+            linear-gradient(120deg, rgba(16,185,129,0.14), transparent 34%),
+            linear-gradient(300deg, rgba(245,158,11,0.12), transparent 36%);
+        }
+        .workspace-topbar {
+          position: relative;
+          display: flex;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 24px;
+          border-bottom: 1px solid rgba(203,213,225,0.68);
+        }
+        .workspace-kicker {
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .workspace-topbar h2 {
+          margin: 5px 0 0;
+          font-size: 20px;
+          letter-spacing: 0;
+        }
+        .live-status,
+        .review-badge {
+          height: fit-content;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          border-radius: 999px;
+          padding: 7px 10px;
+          background: #ecfdf5;
+          color: var(--emerald-dark);
+          border: 1px solid rgba(16,185,129,0.22);
+          font-size: 12px;
+          font-weight: 850;
+        }
+        .live-status span {
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          background: var(--emerald);
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        .workspace-body {
+          position: relative;
+          padding: 24px;
+          display: grid;
+          gap: 14px;
+        }
+        .question-panel,
+        .voice-panel,
+        .transcript-panel,
+        .feedback-panel {
+          border: 1px solid rgba(203,213,225,0.72);
+          border-radius: var(--radius);
+          background: rgba(255,255,255,0.78);
+        }
+        .question-panel,
+        .transcript-panel {
+          padding: 18px;
+        }
+        .question-panel p {
+          margin: 12px 0 0;
+          font-size: 21px;
+          line-height: 1.45;
+          font-weight: 800;
+          letter-spacing: 0;
+        }
+        .voice-panel { padding: 18px; }
+        .voice-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+        }
+        .voice-header span {
+          display: block;
+          margin-top: 6px;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 700;
+        }
+        .icon-button {
+          width: 42px;
+          height: 42px;
+          border-radius: var(--radius);
+          border: 1px solid rgba(16,185,129,0.24);
+          background: #ecfdf5;
+          color: var(--emerald-dark);
+          display: inline-grid;
+          place-items: center;
+        }
+        .waveform {
+          height: 86px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 16px;
+          padding: 0 4px;
+        }
+        .waveform span {
+          flex: 1;
+          height: var(--height);
+          min-width: 4px;
+          border-radius: 999px;
+          background: linear-gradient(180deg, var(--emerald), var(--teal-ink));
+          animation: wave 1.15s ease-in-out infinite;
+          transform-origin: center;
+        }
+        .transcript-panel {
+          min-height: 118px;
+          background: #111827;
+          color: #fff;
+          border-color: rgba(17,24,39,0.3);
+        }
+        .transcript-panel .panel-label { color: #86efac; }
+        .transcript-panel p {
+          margin: 12px 0 0;
+          color: rgba(255,255,255,0.9);
+          line-height: 1.65;
+          font-size: 14px;
+        }
+        .caret {
+          display: inline-block;
+          width: 2px;
+          height: 16px;
+          margin-left: 3px;
+          vertical-align: -2px;
+          background: #86efac;
+          animation: caret 0.9s step-end infinite;
+        }
+        .score-strip {
+          position: relative;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1px;
+          border-top: 1px solid rgba(203,213,225,0.68);
+          background: rgba(203,213,225,0.8);
+        }
+        .mini-meter {
+          padding: 16px;
+          background: rgba(255,255,255,0.9);
+        }
+        .mini-meter-label {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          color: var(--muted);
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .mini-meter-label strong { color: var(--ink); }
+        .mini-meter-track,
+        .feedback-track {
+          height: 7px;
+          overflow: hidden;
+          margin-top: 9px;
+          border-radius: 999px;
+          background: #e2e8f0;
+        }
+        .mini-meter-track span,
+        .feedback-track span {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: linear-gradient(90deg, var(--emerald-dark), var(--emerald));
+          transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .section {
+          width: min(1180px, calc(100% - 40px));
+          margin: 0 auto;
+          padding: 92px 0;
+        }
+        .section-heading {
+          margin-bottom: 34px;
+        }
+        .section-heading.split {
+          display: grid;
+          grid-template-columns: minmax(0, 0.95fr) minmax(280px, 0.55fr);
+          gap: 44px;
+          align-items: end;
+        }
+        .section-heading.centered {
+          max-width: 700px;
+          margin-left: auto;
+          margin-right: auto;
+          text-align: center;
+        }
+        .section-heading h2,
+        .review-copy h2,
+        .final-cta h2 {
+          margin: 12px 0 0;
+          font-size: clamp(31px, 4.2vw, 52px);
+          line-height: 1.04;
+          letter-spacing: 0;
+        }
+        .section-heading p,
+        .review-copy p,
+        .final-cta p {
+          color: var(--muted);
+          line-height: 1.72;
+          font-size: 16px;
+          margin: 12px 0 0;
+        }
+
+        .feature-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 14px;
+        }
+        .feature-card,
+        .workflow-card,
+        .capability-card {
+          opacity: 0;
+          transform: translateY(20px);
+          transition: opacity 0.55s ease, transform 0.55s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .is-visible .feature-card,
+        .is-visible .workflow-card,
+        .is-visible .capability-card {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .feature-card {
+          min-height: 270px;
+          padding: 22px;
+          border-radius: var(--radius);
+          background: #fff;
+          border: 1px solid var(--line);
+          box-shadow: 0 16px 44px rgba(15,23,42,0.07);
           display: flex;
           flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          padding: 28px 24px 24px;
-          text-align: center;
-          backface-visibility: hidden;
-          border: 1px solid rgba(16,185,129,0.12);
+          justify-content: space-between;
         }
-        .capability-card-front {
-          background: white;
-          box-shadow: 0 24px 70px rgba(16,185,129,0.08);
+        .feature-card:hover,
+        .workflow-card:hover,
+        .capability-card:hover {
+          transform: translateY(-4px);
+          border-color: var(--line-strong);
+          box-shadow: 0 22px 54px rgba(15,23,42,0.12);
         }
-        .capability-card-media {
-          width: 100%;
-          height: 68%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 14px;
-        }
-        .capability-card-image {
-          display: block;
-          width: 100%;
-          height: 100%;
-          object-fit: contain;
-          object-position: center;
-        }
-        .capability-card-back {
-          background: linear-gradient(180deg, var(--g-600), var(--g-500));
-          color: white;
-          transform: rotateY(180deg);
-          box-shadow: 0 30px 90px rgba(16,185,129,0.18);
-        }
-        .capability-card-icon {
-          width: 64px;
-          height: 64px;
-          border-radius: 18px;
+        .feature-icon,
+        .workflow-icon {
+          width: 46px;
+          height: 46px;
           display: grid;
           place-items: center;
-          margin-bottom: 20px;
-          background: var(--g-50);
-          color: var(--g-600);
-          transition: background 0.35s ease, color 0.35s ease, box-shadow 0.35s ease;
+          border-radius: var(--radius);
+          color: #fff;
         }
-        .capability-card-icon-back { background: rgba(255,255,255,0.16); color: white; }
-        .capability-card-title {
+        .accent-mint .feature-icon { background: var(--emerald-dark); }
+        .accent-amber .feature-icon { background: var(--amber); }
+        .accent-blue .feature-icon { background: var(--blue); }
+        .accent-rose .feature-icon { background: var(--rose); }
+        .feature-card h3,
+        .workflow-card h3,
+        .capability-copy span {
+          margin: 0;
           font-size: 18px;
-          font-weight: 700;
-          color: var(--ink);
-          margin-bottom: 8px;
-          line-height: 1.2;
+          line-height: 1.25;
+          letter-spacing: 0;
         }
-        .capability-card-title-back { color: white; }
-        .capability-card-description {
+        .feature-card p,
+        .workflow-card p,
+        .capability-copy p {
+          margin: 10px 0 0;
+          color: var(--muted);
           font-size: 14px;
-          color: var(--gray);
-          line-height: 1.7;
-          max-width: 290px;
+          line-height: 1.65;
         }
-        .capability-card-description-back { color: rgba(255,255,255,0.92); margin-top: 10px; }
-        .capability-card:hover .capability-card-front {
-          box-shadow: 0 30px 90px rgba(16,185,129,0.15);
+
+        .workflow-section {
+          width: 100%;
+          max-width: none;
+          padding-left: max(20px, calc((100vw - 1180px) / 2));
+          padding-right: max(20px, calc((100vw - 1180px) / 2));
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0), rgba(236,253,245,0.72) 22%, rgba(236,253,245,0.72) 78%, rgba(255,255,255,0));
         }
-        .capability-card:hover .capability-card-back {
-          box-shadow: 0 30px 90px rgba(16,185,129,0.24);
+        .workflow-grid {
+          max-width: 1180px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 16px;
         }
-        .reveal-visible .capability-card { opacity: 1; transform: translateY(0); }
-        .capability-card { opacity: 0; transform: translateY(20px); transition: opacity 0.55s ease, transform 0.55s ease; }
-        .why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
-        @media (max-width: 1100px) { .capabilities-grid { grid-template-columns: repeat(2, minmax(240px, 1fr)); } }
-        @media (max-width: 720px) { .capabilities-grid { grid-template-columns: 1fr; } }
-
-        /* ---------- Showcase ---------- */
-        .showcase { display: grid; grid-template-columns: 1.5fr 1fr; gap: 28px; margin-top: 60px; align-items: start; }
-        .showcase-main { border-radius: 20px; overflow: hidden; }
-        .showcase-sidebar { border-radius: 20px; padding: 26px; }
-        .meter-row { margin-bottom: 20px; }
-        .meter-label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
-        .meter-track { height: 8px; background: var(--g-50); border-radius: 5px; overflow: hidden; }
-        .meter-fill { height: 100%; background: linear-gradient(90deg, var(--g-400), var(--g-600)); border-radius: 5px; transition: width 1.2s cubic-bezier(0.2,0.8,0.2,1); }
-        .confidence-badge { margin-top: 8px; background: var(--g-50); color: var(--g-700); border-radius: 10px; padding: 12px 14px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-        @media (max-width: 820px) { .showcase { grid-template-columns: 1fr; } }
-
-        /* ---------- Stats ---------- */
-        .stats-section { padding: 80px 40px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 32px; }
-        .stat-card { text-align: center; padding: 32px 20px; border-radius: 16px; background: var(--g-50); }
-        .stat-number { font-size: 38px; font-weight: 800; background: linear-gradient(120deg, var(--g-600), var(--g-400)); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 8px; }
-        .stat-label { font-size: 14px; color: var(--gray); font-weight: 500; }
-
-        /* ---------- Testimonials ---------- */
-        .testimonial-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
-        .testimonial-card { background: white; border: 1px solid var(--line); border-radius: 18px; padding: 28px; opacity: 0; transform: translateY(20px); transition: opacity 0.55s ease, transform 0.55s ease, box-shadow 0.2s; }
-        .testimonial-card:hover { box-shadow: 0 18px 40px rgba(5,46,28,0.08); }
-        .stars { display: flex; gap: 3px; margin-bottom: 14px; }
-        .testimonial-quote { font-size: 15px; color: var(--ink); line-height: 1.65; margin-bottom: 20px; }
-        .testimonial-person { display: flex; align-items: center; gap: 12px; }
-        .avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--g-400), var(--g-700)); color: white; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-        .testimonial-name { font-size: 14px; font-weight: 700; color: var(--ink); }
-        .testimonial-role { font-size: 13px; color: var(--gray-light); }
-
-        /* ---------- FAQ ---------- */
-        .faq-list { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
-        .faq-item { background: white; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; transition: border-color 0.2s; }
-        .faq-item.faq-open { border-color: var(--g-300); }
-        .faq-question { width: 100%; text-align: left; background: none; border: none; padding: 20px 24px; font-size: 15px; font-weight: 600; color: var(--ink); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .faq-chevron { transition: transform 0.3s ease; color: var(--g-500); }
-        .faq-open .faq-chevron { transform: rotate(180deg); }
-        .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.35s ease, padding 0.35s ease; padding: 0 24px; }
-        .faq-open .faq-answer { max-height: 200px; padding: 0 24px 20px; }
-        .faq-answer p { font-size: 14px; color: var(--gray); line-height: 1.6; }
-
-        /* ---------- CTA ---------- */
-        .cta-section {
-          position: relative; overflow: hidden; text-align: center; padding: 110px 40px; margin: 60px auto; max-width: 1320px;
-          border-radius: 32px; background: linear-gradient(160deg, var(--g-950), var(--g-800));
+        .workflow-card {
+          position: relative;
+          min-height: 280px;
+          padding: 24px;
+          border: 1px solid rgba(203,213,225,0.82);
+          border-radius: var(--radius);
+          background: rgba(255,255,255,0.88);
+          overflow: hidden;
         }
-        .cta-title { position: relative; z-index: 1; font-size: clamp(30px, 4vw, 44px); font-weight: 800; margin-bottom: 18px; color: white; letter-spacing: -0.02em; }
-        .cta-description { position: relative; z-index: 1; font-size: 16px; color: rgba(255,255,255,0.72); max-width: 560px; margin: 0 auto 34px; line-height: 1.6; }
+        .workflow-index {
+          position: absolute;
+          right: 20px;
+          top: 14px;
+          color: rgba(17,24,39,0.08);
+          font-size: 68px;
+          font-weight: 900;
+          line-height: 1;
+        }
+        .workflow-icon {
+          position: relative;
+          z-index: 1;
+          margin-bottom: 70px;
+          background: var(--teal-ink);
+        }
 
-        /* ---------- Footer ---------- */
-        .footer { background: white; border-top: 1px solid var(--line); padding: 64px 40px 24px; }
-        .footer-content { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 48px; margin-bottom: 40px; padding-bottom: 40px; border-bottom: 1px solid var(--line); }
-        .footer-brand { text-align: left; }
-        .footer-logo { display: flex; align-items: center; font-size: 18px; font-weight: 800; margin-bottom: 12px; color: var(--ink); }
-        .footer-tagline { font-size: 14px; color: var(--gray); }
-        .footer-col-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gray-light); margin-bottom: 14px; }
-        .footer-col { display: flex; flex-direction: column; gap: 10px; }
-        .footer-link { font-size: 14px; color: var(--gray); text-decoration: none; transition: color 0.2s; width: fit-content; }
-        .footer-link:hover { color: var(--g-600); }
-        .footer-bottom { max-width: 1320px; margin: 0 auto; text-align: center; font-size: 13px; color: var(--gray-light); }
-        @media (max-width: 700px) { .footer-content { grid-template-columns: 1fr; } }
+        .capability-grid {
+          display: grid;
+          grid-template-columns: repeat(6, minmax(0, 1fr));
+          gap: 14px;
+        }
+        .capability-card {
+          min-height: 318px;
+          display: flex;
+          flex-direction: column;
+          grid-column: span 2;
+          border-radius: var(--radius);
+          border: 1px solid var(--line);
+          background: #fff;
+          overflow: hidden;
+          box-shadow: 0 16px 44px rgba(15,23,42,0.07);
+        }
+        .capability-card:nth-child(4) { grid-column: 2 / span 2; }
+        .capability-card:nth-child(5) { grid-column: 4 / span 2; }
+        .capability-media {
+          min-height: 194px;
+          display: grid;
+          place-items: center;
+          padding: 24px;
+          background:
+            linear-gradient(135deg, rgba(236,253,245,0.96), rgba(255,247,237,0.78)),
+            #f8fafc;
+          border-bottom: 1px solid var(--line);
+        }
+        .capability-media img {
+          width: 100%;
+          height: 154px;
+          object-fit: contain;
+        }
+        .capability-copy {
+          padding: 18px;
+        }
+        .capability-copy span {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 850;
+        }
+        .capability-copy svg { color: var(--emerald-dark); }
+
+        .review-card {
+          display: grid;
+          grid-template-columns: minmax(0, 0.95fr) minmax(340px, 0.7fr);
+          gap: 30px;
+          padding: 34px;
+          background:
+            linear-gradient(135deg, rgba(255,255,255,0.94), rgba(236,253,245,0.88)),
+            #fff;
+        }
+        .review-copy {
+          align-self: center;
+        }
+        .review-points {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-top: 24px;
+        }
+        .review-points span {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 12px;
+          border-radius: var(--radius);
+          border: 1px solid var(--line);
+          background: rgba(255,255,255,0.75);
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .feedback-panel {
+          padding: 22px;
+          background: #fff;
+          box-shadow: 0 18px 48px rgba(15,23,42,0.09);
+        }
+        .feedback-header,
+        .feedback-meter div:first-child {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 14px;
+        }
+        .feedback-header {
+          margin-bottom: 22px;
+          font-weight: 900;
+        }
+        .feedback-meter {
+          margin-top: 18px;
+        }
+        .feedback-meter div:first-child {
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 850;
+        }
+        .feedback-meter strong { color: var(--ink); }
+        .feedback-note {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          margin-top: 24px;
+          padding: 14px;
+          border-radius: var(--radius);
+          background: #111827;
+          color: rgba(255,255,255,0.88);
+          font-size: 13px;
+          line-height: 1.5;
+        }
+        .feedback-note svg {
+          color: #86efac;
+          flex: 0 0 auto;
+          margin-top: 1px;
+        }
+
+        .faq-section {
+          max-width: 880px;
+        }
+        .faq-list {
+          display: grid;
+          gap: 10px;
+        }
+        .faq-item {
+          border: 1px solid var(--line);
+          border-radius: var(--radius);
+          background: rgba(255,255,255,0.84);
+          overflow: hidden;
+        }
+        .faq-item button {
+          width: 100%;
+          min-height: 62px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          border: 0;
+          background: transparent;
+          color: var(--ink);
+          padding: 0 20px;
+          text-align: left;
+          font-weight: 850;
+        }
+        .faq-item svg {
+          flex: 0 0 auto;
+          color: var(--emerald-dark);
+          transition: transform 0.25s ease;
+        }
+        .faq-item.is-open svg { transform: rotate(180deg); }
+        .faq-answer {
+          max-height: 0;
+          overflow: hidden;
+          transition: max-height 0.28s ease, padding 0.28s ease;
+        }
+        .faq-answer p {
+          margin: 0;
+          color: var(--muted);
+          line-height: 1.65;
+          padding: 0 20px;
+        }
+        .faq-item.is-open .faq-answer {
+          max-height: 180px;
+          padding-bottom: 20px;
+        }
+
+        .final-cta {
+          width: min(1180px, calc(100% - 40px));
+          margin: 30px auto 80px;
+          padding: 34px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 28px;
+          background:
+            linear-gradient(135deg, rgba(17,24,39,0.96), rgba(7,59,58,0.96)),
+            #111827;
+          color: #fff;
+          overflow: hidden;
+        }
+        .final-cta .section-kicker { color: #86efac; }
+        .final-cta h2 {
+          max-width: 760px;
+          color: #fff;
+        }
+        .final-cta p {
+          max-width: 620px;
+          color: rgba(255,255,255,0.72);
+        }
+
+        .footer {
+          width: min(1180px, calc(100% - 40px));
+          margin: 0 auto;
+          padding: 28px 0 46px;
+          display: flex;
+          justify-content: space-between;
+          gap: 24px;
+          color: var(--muted);
+          border-top: 1px solid var(--line);
+        }
+        .footer-brand strong {
+          display: block;
+          color: var(--ink);
+        }
+        .footer-brand p {
+          margin: 3px 0 0;
+          font-size: 13px;
+        }
+        .footer-links {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 14px;
+          font-size: 14px;
+          font-weight: 750;
+        }
+        .footer-links button {
+          border: 0;
+          background: transparent;
+          color: inherit;
+          padding: 0;
+          font-weight: inherit;
+        }
+        .footer-links a:hover,
+        .footer-links button:hover {
+          color: var(--ink);
+        }
+
+        @media (max-width: 1040px) {
+          .hero-grid,
+          .section-heading.split,
+          .review-card {
+            grid-template-columns: 1fr;
+          }
+          .hero-grid {
+            min-height: auto;
+          }
+          .interview-workspace {
+            max-width: 760px;
+          }
+          .feature-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .capability-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .capability-card,
+          .capability-card:nth-child(4),
+          .capability-card:nth-child(5) {
+            grid-column: auto;
+          }
+        }
+
+        @media (max-width: 840px) {
+          .nav-shell {
+            width: min(100% - 28px, 1180px);
+          }
+          .nav-links,
+          .nav-actions {
+            display: none;
+          }
+          .menu-button {
+            display: inline-flex;
+          }
+          .mobile-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: min(100% - 28px, 1180px);
+            margin: 0 auto 14px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: rgba(255,255,255,0.96);
+            box-shadow: 0 20px 44px rgba(15,23,42,0.12);
+          }
+          .mobile-menu a {
+            padding: 12px;
+            border-radius: 6px;
+            color: var(--muted);
+            font-weight: 800;
+          }
+          .mobile-menu a:hover {
+            color: var(--ink);
+            background: var(--soft);
+          }
+          .mobile-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 8px;
+          }
+          .hero,
+          .section,
+          .final-cta,
+          .footer {
+            width: min(100% - 28px, 1180px);
+          }
+          .hero {
+            padding-top: 46px;
+          }
+          .workflow-grid,
+          .score-strip {
+            grid-template-columns: 1fr;
+          }
+          .workflow-icon {
+            margin-bottom: 48px;
+          }
+          .final-cta,
+          .footer {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+          .footer-links {
+            justify-content: flex-start;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .hero-copy h1 {
+            font-size: clamp(38px, 14vw, 54px);
+          }
+          .hero-lede {
+            font-size: 16px;
+          }
+          .hero-actions,
+          .mobile-actions,
+          .feature-grid,
+          .capability-grid {
+            grid-template-columns: 1fr;
+          }
+          .hero-actions {
+            display: grid;
+          }
+          .hero-button,
+          .ghost-button,
+          .outline-button,
+          .solid-button {
+            width: 100%;
+          }
+          .workspace-topbar,
+          .voice-header {
+            flex-direction: column;
+          }
+          .workspace-body,
+          .workspace-topbar,
+          .review-card,
+          .final-cta {
+            padding: 18px;
+          }
+          .question-panel p {
+            font-size: 18px;
+          }
+          .waveform {
+            gap: 4px;
+            height: 70px;
+          }
+          .feature-card,
+          .workflow-card {
+            min-height: 230px;
+          }
+          .capability-media {
+            min-height: 170px;
+          }
+          .capability-media img {
+            height: 130px;
+          }
+          .section {
+            padding: 68px 0;
+          }
+        }
 
         @media (prefers-reduced-motion: reduce) {
-          *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+          *, *::before, *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: 0.01ms !important;
+          }
         }
       `}</style>
     </div>
   );
 }
-
-const styles = {
-  container: { width: '100%', backgroundColor: '#ffffff', color: '#0a1f17', overflowX: 'hidden' },
-  navContent: { maxWidth: '1400px', margin: '0 auto', padding: '14px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  logo: { display: 'flex', alignItems: 'center', fontSize: '18px', fontWeight: 'bold', minWidth: '150px' },
-  logoText: { color: '#0a1f17' },
-  navLinks: { display: 'flex', gap: '40px', flex: 1, marginLeft: '60px' },
-  navButtons: { display: 'flex', gap: '14px', alignItems: 'center' },
-  hero: {
-    marginTop: '80px', padding: '110px 40px 60px', textAlign: 'center', position: 'relative', maxWidth: '1400px',
-    margin: '80px auto 0', minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center',
-    alignItems: 'center', overflow: 'hidden',
-  },
-  heroCTAContainer: { display: 'flex', gap: '16px', justifyContent: 'center', marginBottom: '20px', position: 'relative', zIndex: 1, flexWrap: 'wrap' },
-};

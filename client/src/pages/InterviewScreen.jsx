@@ -1,5 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import {
+  AlertTriangle,
+  ArrowRight,
+  ClipboardX,
+  Eye,
+  Home,
+  LoaderCircle,
+  Lock,
+  Maximize2,
+  Mic,
+  Monitor,
+  ShieldAlert,
+  ShieldCheck,
+  Volume2,
+} from "lucide-react";
 import api, { getApiErrorMessage, submitAntiCheating, terminateForCheating } from "../services/api";
 import { getInterviewerVideo, getInterviewerVoice } from "../services/interviewerHelpers";
 import { useAntiCheating } from "../hooks/useAntiCheating";
@@ -962,33 +977,43 @@ export default function InterviewScreen() {
           html, body, #root { margin: 0; padding: 0; }
           .termination-screen {
             position: fixed; inset: 0;
-            background: #0f172a;
+            background:
+              radial-gradient(circle at 50% 18%, rgba(239,68,68,0.18), transparent 28rem),
+              linear-gradient(135deg, #070b14, #111827 58%, #151018);
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            gap: 20px; padding: 32px;
+            gap: 18px; padding: 32px;
             z-index: 9999; text-align: center;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           }
-          .termination-icon { font-size: 56px; line-height: 1; }
-          .termination-title { font-size: 32px; font-weight: 800; color: #f1f5f9; margin: 0; letter-spacing: -0.5px; }
-          .termination-subtitle { font-size: 16px; font-weight: 600; color: #ef4444; margin: 0; }
+          .termination-icon {
+            width: 68px; height: 68px; border-radius: 18px;
+            display: inline-grid; place-items: center;
+            color: #fecaca;
+            background: rgba(239,68,68,0.12);
+            border: 1px solid rgba(248,113,113,0.26);
+            box-shadow: 0 24px 70px rgba(0,0,0,0.35);
+          }
+          .termination-title { font-size: clamp(30px, 5vw, 44px); font-weight: 850; color: #f8fafc; margin: 0; letter-spacing: 0; }
+          .termination-subtitle { font-size: 15px; font-weight: 750; color: #fca5a5; margin: 0; }
           .termination-reason {
-            font-size: 14px; color: #94a3b8; max-width: 420px; line-height: 1.65;
-            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
-            border-radius: 10px; padding: 14px 20px; margin: 0;
+            font-size: 14px; color: #cbd5e1; max-width: 460px; line-height: 1.7;
+            background: rgba(15,23,42,0.7); border: 1px solid rgba(248,113,113,0.22);
+            border-radius: 8px; padding: 16px 20px; margin: 0;
           }
-          .termination-redirect { font-size: 13px; color: #475569; margin: 0; }
+          .termination-redirect { font-size: 13px; color: #64748b; margin: 0; }
           .termination-home-btn {
-            margin-top: 4px; background: #ef4444; color: #ffffff;
-            border: none; border-radius: 10px; padding: 14px 36px;
-            font-size: 15px; font-weight: 700; cursor: pointer;
+            margin-top: 4px; background: #ffffff; color: #111827;
+            border: none; border-radius: 8px; padding: 14px 24px;
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            font-size: 15px; font-weight: 800; cursor: pointer;
             transition: opacity 0.15s ease, transform 0.15s ease;
-            box-shadow: 0 4px 14px rgba(239,68,68,0.35);
+            box-shadow: 0 18px 48px rgba(0,0,0,0.28);
           }
           .termination-home-btn:hover { opacity: 0.9; transform: translateY(-1px); }
         `}</style>
 
-        <p className="termination-icon">🚫</p>
+        <div className="termination-icon" aria-hidden="true"><ShieldAlert size={34} /></div>
         <h1 className="termination-title">Interview Ended</h1>
         <p className="termination-subtitle">Interview ended due to cheating.</p>
         <p className="termination-reason">{cheatingReason}</p>
@@ -998,6 +1023,7 @@ export default function InterviewScreen() {
           className="termination-home-btn"
           onClick={() => navigate("/")}
         >
+          <Home size={17} aria-hidden="true" />
           Return to Home
         </button>
       </div>
@@ -1821,6 +1847,712 @@ export default function InterviewScreen() {
           animation: snackbar-in 0.2s ease;
         }
 
+        /* ---------- PREMIUM INTERVIEW ROOM OVERRIDES ---------- */
+        :root {
+          --room-ink: #111827;
+          --room-muted: #667085;
+          --room-soft: #f4f7fb;
+          --room-panel: #ffffff;
+          --room-line: #dfe7ef;
+          --room-line-strong: #cbd5e1;
+          --room-green: #10b981;
+          --room-green-dark: #047857;
+          --room-teal: #073b3a;
+          --room-amber: #f59e0b;
+          --room-red: #ef4444;
+          --room-shadow: 0 22px 60px rgba(15, 23, 42, 0.10);
+          --room-radius: 8px;
+        }
+
+        html, body, #root {
+          width: 100%;
+          min-height: 100%;
+          background: #0b1220;
+        }
+
+        .ai-interview-screen {
+          background:
+            linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+            linear-gradient(180deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+            #0b1220;
+          background-size: 42px 42px;
+          color: var(--room-ink);
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          gap: 0;
+        }
+
+        .interview-left {
+          width: 42vw;
+          min-width: 420px;
+          background:
+            radial-gradient(circle at 50% 22%, rgba(16,185,129,0.25), transparent 28rem),
+            linear-gradient(180deg, #111827, #020617);
+          overflow: hidden;
+          border-right: 1px solid rgba(255,255,255,0.12);
+        }
+
+        .interview-left::before,
+        .interview-left::after {
+          content: "";
+          position: absolute;
+          inset: auto 24px 24px;
+          height: 34%;
+          pointer-events: none;
+          border-radius: 18px;
+          background: linear-gradient(180deg, transparent, rgba(2,6,23,0.82));
+          z-index: 2;
+        }
+
+        .interview-left::after {
+          inset: 20px;
+          height: auto;
+          border: 1px solid rgba(255,255,255,0.12);
+          background: transparent;
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+        }
+
+        .interviewer-video {
+          filter: saturate(1.02) contrast(1.02);
+          transform: scale(1.01);
+        }
+
+        .gender-switcher {
+          bottom: 28px;
+          z-index: 5;
+          border-radius: var(--room-radius);
+          padding: 5px;
+          background: rgba(15,23,42,0.68);
+          border: 1px solid rgba(255,255,255,0.18);
+          box-shadow: 0 18px 42px rgba(0,0,0,0.32);
+        }
+
+        .gender-btn {
+          border-radius: 6px;
+          padding: 9px 16px;
+          font-size: 12px;
+          font-weight: 800;
+          color: rgba(255,255,255,0.74);
+        }
+
+        .gender-btn.active {
+          color: #082f2f;
+          background: #ffffff;
+        }
+
+        .interview-right {
+          width: 58vw;
+          padding: 24px;
+          gap: 14px;
+          background:
+            radial-gradient(circle at 92% -10%, rgba(16,185,129,0.16), transparent 24rem),
+            radial-gradient(circle at 0% 100%, rgba(245,158,11,0.12), transparent 24rem),
+            var(--room-soft);
+        }
+
+        .interview-right::-webkit-scrollbar { width: 10px; }
+        .interview-right::-webkit-scrollbar-track { background: transparent; }
+        .interview-right::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; border: 3px solid var(--room-soft); }
+
+        .right-top-row {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 210px;
+          align-items: stretch;
+          gap: 14px;
+        }
+
+        .interview-info,
+        .status-card,
+        .question-card,
+        .answer-area,
+        .feedback-card,
+        .anti-cheat-bar,
+        .fullscreen-banner {
+          border-radius: var(--room-radius);
+          border: 1px solid var(--room-line);
+          box-shadow: var(--room-shadow);
+        }
+
+        .interview-info {
+          min-height: 138px;
+          padding: 20px;
+          display: flex;
+          align-items: center;
+          background:
+            linear-gradient(135deg, rgba(255,255,255,0.98), rgba(236,253,245,0.82)),
+            var(--room-panel);
+          border-color: rgba(16,185,129,0.18);
+        }
+
+        .interview-info.loading,
+        .interview-info.error {
+          min-height: 138px;
+          font-weight: 750;
+        }
+
+        .interview-info.loading div {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .interview-info.loading div::before {
+          content: "";
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          border: 2px solid #d1fae5;
+          border-top-color: var(--room-green-dark);
+          animation: room-spin 0.8s linear infinite;
+        }
+
+        .interview-info.error {
+          background: #fffbeb;
+          border-color: #fbbf24;
+          color: #92400e;
+        }
+
+        .interview-role {
+          color: var(--room-ink);
+          font-size: clamp(24px, 3vw, 36px);
+          font-weight: 850;
+          letter-spacing: 0;
+        }
+
+        .interview-meta,
+        .interview-difficulty {
+          color: var(--room-muted);
+          font-size: 13px;
+          font-weight: 700;
+        }
+
+        .interview-meta {
+          margin-top: 10px;
+          gap: 8px;
+        }
+
+        .interview-meta span {
+          padding: 6px 10px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.78);
+          border: 1px solid rgba(203,213,225,0.75);
+        }
+
+        .interview-difficulty {
+          margin-top: 10px;
+        }
+
+        .interview-difficulty strong,
+        .interview-topics-label {
+          color: var(--room-green-dark);
+          font-weight: 850;
+        }
+
+        .interview-topic-chip {
+          border-radius: 999px;
+          background: #ecfdf5;
+          border-color: rgba(16,185,129,0.25);
+          color: var(--room-green-dark);
+          padding: 6px 10px;
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .status-card {
+          width: auto;
+          padding: 18px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          background: #111827;
+          color: #f8fafc;
+          border-color: rgba(255,255,255,0.08);
+          box-shadow: 0 24px 64px rgba(15,23,42,0.24);
+        }
+
+        .status-heading {
+          color: #9ca3af;
+          text-align: left;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .status-timer-row {
+          justify-content: flex-start;
+          gap: 12px;
+          margin: 10px 0;
+        }
+
+        .timer-ring {
+          width: 58px;
+          height: 58px;
+          box-shadow: 0 0 0 8px rgba(255,255,255,0.05);
+        }
+
+        .timer-ring-inner {
+          width: 44px;
+          height: 44px;
+          background: #111827;
+        }
+
+        .timer-text {
+          color: #ffffff;
+          font-size: 24px;
+          font-weight: 850;
+        }
+
+        .status-question-count {
+          text-align: left;
+          color: #cbd5e1;
+          margin: 0;
+          font-size: 13px;
+        }
+
+        .status-question-count span {
+          color: #86efac;
+        }
+
+        .anti-cheat-bar {
+          background: #ffffff;
+          padding: 12px 14px;
+          gap: 8px;
+          border-color: rgba(16,185,129,0.18);
+        }
+
+        .anti-cheat-bar-title {
+          color: var(--room-green-dark);
+          margin-right: 6px;
+        }
+
+        .anti-cheat-stat {
+          padding: 7px 10px;
+          border-radius: 999px;
+          background: var(--room-soft);
+          color: var(--room-muted);
+          font-weight: 750;
+        }
+
+        .anti-cheat-stat.nonzero {
+          color: #92400e;
+          background: #fffbeb;
+        }
+
+        .fullscreen-banner {
+          padding: 12px 14px;
+          background: #fffbeb;
+          border-color: #fcd34d;
+        }
+
+        .fullscreen-banner-msg {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 700;
+        }
+
+        .return-fullscreen-btn,
+        .read-question-btn,
+        .next-question-btn,
+        .start-interview-btn,
+        .termination-home-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+
+        .return-fullscreen-btn {
+          border-radius: 7px;
+          padding: 9px 12px;
+          font-weight: 800;
+        }
+
+        .question-card {
+          padding: 22px;
+          background: #ffffff;
+          border-color: var(--room-line);
+        }
+
+        .question-header-row {
+          gap: 18px;
+        }
+
+        .question-of {
+          display: inline-flex;
+          align-items: center;
+          width: fit-content;
+          padding: 7px 10px;
+          border-radius: 999px;
+          margin-bottom: 14px;
+          background: #ecfdf5;
+          color: var(--room-green-dark);
+          border: 1px solid rgba(16,185,129,0.22);
+          font-size: 12px;
+          font-weight: 850;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+
+        .question-text {
+          color: var(--room-ink);
+          font-size: clamp(20px, 2.2vw, 29px);
+          line-height: 1.35;
+          font-weight: 850;
+          letter-spacing: 0;
+        }
+
+        .read-question-btn {
+          border-radius: var(--room-radius);
+          padding: 11px 14px;
+          background: #111827;
+          border-color: #111827;
+          color: #ffffff;
+          font-size: 13px;
+          box-shadow: 0 12px 28px rgba(15,23,42,0.16);
+        }
+
+        .read-question-btn:hover:not(:disabled),
+        .read-question-btn.speaking {
+          background: var(--room-teal);
+          border-color: var(--room-teal);
+          color: #ffffff;
+        }
+
+        .dsa-problem {
+          margin-top: 18px;
+          padding-top: 18px;
+          border-top: 1px solid var(--room-line);
+        }
+
+        .dsa-section-label {
+          color: var(--room-green-dark);
+          font-weight: 850;
+        }
+
+        .dsa-description {
+          color: #344054;
+        }
+
+        .dsa-example-block {
+          border-radius: var(--room-radius);
+          background: #0f172a;
+          border-color: #1e293b;
+          color: #e5e7eb;
+        }
+
+        .dsa-leetcode-link {
+          border-radius: var(--room-radius);
+          color: #075985;
+          font-weight: 800;
+        }
+
+        .answer-input-wrap {
+          flex: 1;
+          min-height: 220px;
+          display: flex;
+        }
+
+        .answer-area {
+          flex: 1;
+          min-height: 220px;
+          resize: vertical;
+          background: #ffffff;
+          border-color: var(--room-line);
+          color: var(--room-ink);
+          padding: 20px 68px 20px 20px;
+          font-size: 15px;
+          line-height: 1.7;
+          box-shadow: var(--room-shadow);
+        }
+
+        .answer-area::placeholder {
+          color: #98a2b3;
+        }
+
+        .answer-area:focus {
+          border-color: var(--room-green);
+          box-shadow: 0 0 0 4px rgba(16,185,129,0.13), var(--room-shadow);
+        }
+
+        .mic-button {
+          top: 20px;
+          right: 20px;
+          transform: none;
+          width: 46px;
+          height: 46px;
+          border-radius: var(--room-radius);
+          border-color: rgba(16,185,129,0.24);
+          background: #ecfdf5;
+          color: var(--room-green-dark);
+        }
+
+        .mic-button:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 14px 30px rgba(16,185,129,0.16);
+        }
+
+        .mic-button.listening {
+          background: #fef2f2;
+          border-color: #fecaca;
+          color: #dc2626;
+          box-shadow: 0 0 0 4px rgba(239,68,68,0.12);
+        }
+
+        .speech-warning {
+          margin: -6px 0 0;
+          padding: 10px 12px;
+          width: fit-content;
+          border-radius: var(--room-radius);
+          background: #fffbeb;
+          border: 1px solid #fde68a;
+          color: #92400e;
+          font-weight: 700;
+        }
+
+        .feedback-card {
+          position: sticky;
+          bottom: 0;
+          z-index: 4;
+          padding: 14px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 210px;
+          align-items: center;
+          gap: 14px;
+          background: rgba(255,255,255,0.92);
+          backdrop-filter: blur(18px);
+          border-color: rgba(16,185,129,0.22);
+        }
+
+        .feedback-text {
+          color: var(--room-muted);
+          font-size: 13px;
+          line-height: 1.6;
+          font-weight: 650;
+        }
+
+        .next-question-btn {
+          width: auto;
+          min-height: 48px;
+          border-radius: var(--room-radius);
+          padding: 0 18px;
+          background: linear-gradient(135deg, var(--room-teal), var(--room-green-dark) 55%, var(--room-green));
+          font-weight: 850;
+          box-shadow: 0 18px 36px rgba(4,120,87,0.24);
+        }
+
+        .start-screen {
+          position: fixed;
+          inset: 0 0 0 42vw;
+          background:
+            radial-gradient(circle at 50% 8%, rgba(16,185,129,0.18), transparent 28rem),
+            rgba(244,247,251,0.96);
+          backdrop-filter: blur(18px);
+          gap: 18px;
+          padding: 36px;
+        }
+
+        .start-screen::before {
+          content: "";
+          width: 58px;
+          height: 58px;
+          border-radius: 16px;
+          background:
+            linear-gradient(135deg, var(--room-teal), var(--room-green));
+          box-shadow: 0 18px 44px rgba(4,120,87,0.25);
+        }
+
+        .start-screen-title {
+          font-size: clamp(32px, 4.5vw, 46px);
+          line-height: 1.04;
+          font-weight: 850;
+          letter-spacing: 0;
+        }
+
+        .start-screen-subtitle {
+          color: var(--room-muted);
+          font-size: 15px;
+          font-weight: 700;
+          max-width: 460px;
+        }
+
+        .start-screen-rules {
+          max-width: 480px;
+          padding: 18px;
+          border-radius: var(--room-radius);
+          background: #ffffff;
+          border-color: var(--room-line);
+          box-shadow: var(--room-shadow);
+        }
+
+        .start-screen-rules-title {
+          color: var(--room-green-dark);
+          font-weight: 850;
+          margin-bottom: 14px;
+        }
+
+        .start-screen-rules ul {
+          padding: 0;
+          gap: 10px;
+          list-style: none;
+        }
+
+        .start-screen-rules li {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          color: #344054;
+          font-weight: 700;
+        }
+
+        .start-screen-rules li svg {
+          color: var(--room-green-dark);
+          flex: 0 0 auto;
+        }
+
+        .start-interview-btn {
+          min-height: 54px;
+          border-radius: var(--room-radius);
+          padding: 0 28px;
+          background: linear-gradient(135deg, var(--room-teal), var(--room-green-dark) 55%, var(--room-green));
+          font-weight: 850;
+          box-shadow: 0 18px 38px rgba(4,120,87,0.28);
+        }
+
+        .start-interview-btn svg {
+          animation: none;
+        }
+
+        .start-interview-btn:disabled svg {
+          animation: room-spin 0.9s linear infinite;
+        }
+
+        .start-screen-error {
+          border-radius: var(--room-radius);
+          font-weight: 700;
+        }
+
+        .anti-cheat-warning {
+          bottom: 24px;
+          border-radius: var(--room-radius);
+          background: #111827;
+          border: 1px solid rgba(255,255,255,0.08);
+          box-shadow: 0 22px 54px rgba(15,23,42,0.26);
+        }
+
+        @keyframes room-spin {
+          to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 1180px) {
+          .interview-left {
+            width: 38vw;
+            min-width: 360px;
+          }
+
+          .interview-right {
+            width: 62vw;
+          }
+
+          .right-top-row,
+          .feedback-card {
+            grid-template-columns: 1fr;
+          }
+
+          .status-card {
+            min-height: 112px;
+          }
+
+          .start-screen {
+            inset: 0 0 0 38vw;
+          }
+        }
+
+        @media (max-width: 900px) {
+          .ai-interview-screen {
+            background: var(--room-soft);
+          }
+
+          .interview-left {
+            width: 100vw;
+            min-width: 0;
+            height: 42vh;
+          }
+
+          .interview-right {
+            width: 100vw;
+            min-height: 58vh;
+            padding: 16px;
+          }
+
+          .start-screen {
+            inset: 0;
+          }
+
+          .status-card {
+            width: 100%;
+          }
+
+          .question-header-row {
+            flex-direction: column;
+          }
+
+          .read-question-btn {
+            width: 100%;
+          }
+
+          .feedback-card {
+            position: relative;
+          }
+
+          .next-question-btn {
+            width: 100%;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .interview-left {
+            height: 34vh;
+          }
+
+          .interview-right {
+            padding: 12px;
+            gap: 12px;
+          }
+
+          .interview-info,
+          .status-card,
+          .question-card,
+          .feedback-card,
+          .start-screen-rules {
+            padding: 16px;
+          }
+
+          .interview-role {
+            font-size: 24px;
+          }
+
+          .question-text {
+            font-size: 20px;
+          }
+
+          .answer-input-wrap,
+          .answer-area {
+            min-height: 260px;
+          }
+
+          .anti-cheat-bar,
+          .fullscreen-banner {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .return-fullscreen-btn,
+          .start-interview-btn {
+            width: 100%;
+          }
+        }
+
         @keyframes snackbar-in {
           from { opacity: 0; transform: translateX(-50%) translateY(10px); }
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -1877,10 +2609,10 @@ export default function InterviewScreen() {
             <div className="start-screen-rules">
               <p className="start-screen-rules-title">Interview Rules</p>
               <ul>
-                <li>🖥️ Fullscreen mode is required throughout</li>
-                <li>👁️ Tab switching is monitored</li>
-                <li>📋 Copy / Paste / Cut are restricted</li>
-                <li>🖱️ Right-click is disabled</li>
+                <li><Maximize2 size={16} aria-hidden="true" /> Fullscreen mode is required throughout</li>
+                <li><Eye size={16} aria-hidden="true" /> Tab switching is monitored</li>
+                <li><ClipboardX size={16} aria-hidden="true" /> Copy / Paste / Cut are restricted</li>
+                <li><Monitor size={16} aria-hidden="true" /> Right-click is disabled</li>
               </ul>
             </div>
 
@@ -1894,7 +2626,17 @@ export default function InterviewScreen() {
               onClick={handleStartInterview}
               disabled={loadingInterview || startingInterview || Boolean(interviewError)}
             >
-              {startingInterview ? "Starting..." : "Start Interview"}
+              {startingInterview ? (
+                <>
+                  <LoaderCircle size={18} aria-hidden="true" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={18} aria-hidden="true" />
+                  Start Interview
+                </>
+              )}
             </button>
           </div>
         )}
@@ -1964,7 +2706,8 @@ export default function InterviewScreen() {
         {interviewStarted && (
           <div className="anti-cheat-bar" role="status" aria-label="Security monitoring status">
             <span className="anti-cheat-bar-title">
-              🔒 Security Monitoring: Active
+              <Lock size={14} aria-hidden="true" />
+              Security Monitoring: Active
             </span>
             <span className={`anti-cheat-stat ${tabSwitchCount > 0 ? "nonzero" : ""}`}>
               Tab switches: {tabSwitchCount}
@@ -1985,13 +2728,15 @@ export default function InterviewScreen() {
         {interviewStarted && !isFullscreen && !fullscreenUnavailable && (
           <div className="fullscreen-banner" role="alert">
             <span className="fullscreen-banner-msg">
-              ⚠️ Please return to fullscreen mode to continue the interview.
+              <AlertTriangle size={15} aria-hidden="true" />
+              Please return to fullscreen mode to continue the interview.
             </span>
             <button
               type="button"
               className="return-fullscreen-btn"
               onClick={() => requestFullscreen()}
             >
+              <Maximize2 size={14} aria-hidden="true" />
               Return to Fullscreen
             </button>
           </div>
@@ -2013,7 +2758,17 @@ export default function InterviewScreen() {
                 onClick={() => speakQuestion(currentQuestionText, currentQuestionSpeechKey, { force: true })}
                 disabled={loadingInterview || submittingAnswer || !currentQuestionText}
               >
-                {isSpeaking ? "Speaking..." : "🔊 Read Question"}
+                {isSpeaking ? (
+                  <>
+                    <Volume2 size={15} aria-hidden="true" />
+                    Speaking...
+                  </>
+                ) : (
+                  <>
+                    <Volume2 size={15} aria-hidden="true" />
+                    Read Question
+                  </>
+                )}
               </button>
             ) : null}
           </div>
@@ -2057,7 +2812,8 @@ export default function InterviewScreen() {
                   rel="noopener noreferrer"
                   className="dsa-leetcode-link"
                 >
-                  🔗 View on LeetCode
+                  View on LeetCode
+                  <ArrowRight size={14} aria-hidden="true" />
                 </a>
               )}
             </div>
@@ -2086,7 +2842,7 @@ export default function InterviewScreen() {
               title={isListening ? "Stop microphone" : "Start microphone"}
               disabled={loadingInterview || submittingAnswer || !currentQuestion}
             >
-              {isListening ? "🎙️" : "🎤"}
+              <Mic size={18} aria-hidden="true" />
             </button>
           ) : null}
         </div>
@@ -2106,7 +2862,12 @@ export default function InterviewScreen() {
             onClick={handleNextQuestion}
             disabled={loadingInterview || submittingAnswer || !currentQuestion}
           >
-            {submittingAnswer ? (isLast ? "Completing..." : "Saving...") : isLast ? "Submit Interview" : "Next Question →"}
+            {submittingAnswer ? (isLast ? "Completing..." : "Saving...") : isLast ? "Submit Interview" : (
+              <>
+                Next Question
+                <ArrowRight size={16} aria-hidden="true" />
+              </>
+            )}
           </button>
         </div>
       </div>
