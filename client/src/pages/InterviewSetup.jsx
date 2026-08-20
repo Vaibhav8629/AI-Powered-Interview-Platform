@@ -5,7 +5,6 @@ import {
   Check,
   ChevronRight,
   ChevronLeft,
-  Sparkles,
   Plus,
   X,
   Upload,
@@ -14,8 +13,9 @@ import {
   Loader2,
   Zap,
   AlertTriangle,
+  BrainCircuit,
+  ShieldCheck,
 } from "lucide-react";
-import ScannerBackground from '../components/Scannerbackground';
 import api, { getApiErrorMessage, fetchUserCredits } from "../services/api";
 import { extractResumeText } from "../services/resumeParser";
 
@@ -85,8 +85,8 @@ const emptyForm = {
 function FieldError({ message }) {
   if (!message) return null;
   return (
-    <p className="mt-2 flex items-center gap-1.5 text-[13px] font-medium text-rose-600">
-      <span className="inline-block h-1 w-1 rounded-full bg-rose-500" />
+    <p className="mt-3 flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-700">
+      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
       {message}
     </p>
   );
@@ -97,30 +97,31 @@ function SelectCard({ label, sublabel, selected, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`group relative w-full rounded-2xl border px-4 py-3.5 text-left transition-all duration-200 ${
+      className={`group relative w-full overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
         selected
-          ? "border-emerald-500 bg-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
-          : "border-neutral-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40"
+          ? "border-indigo-500 bg-indigo-50 shadow-[0_12px_30px_-18px_rgba(79,70,229,0.9)]"
+          : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_12px_30px_-22px_rgba(15,23,42,0.45)]"
       }`}
     >
+      {selected && <span className="absolute inset-y-0 left-0 w-1 bg-indigo-500" />}
       <div className="flex items-start justify-between gap-3">
         <div>
           <div
             className={`text-[14.5px] font-semibold ${
-              selected ? "text-emerald-800" : "text-neutral-800"
+              selected ? "text-indigo-950" : "text-slate-800"
             }`}
           >
             {label}
           </div>
           {sublabel && (
-            <div className="mt-0.5 text-[12.5px] text-neutral-500">{sublabel}</div>
+            <div className="mt-1 text-[12.5px] leading-relaxed text-slate-500">{sublabel}</div>
           )}
         </div>
         <div
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all ${
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all ${
             selected
-              ? "border-emerald-500 bg-emerald-500"
-              : "border-neutral-300 bg-white group-hover:border-emerald-400"
+              ? "border-indigo-600 bg-indigo-600"
+              : "border-slate-300 bg-white group-hover:border-indigo-400"
           }`}
         >
           {selected && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
@@ -133,10 +134,10 @@ function SelectCard({ label, sublabel, selected, onClick }) {
 function Slider({ label, min, max, value, unit, onChange }) {
   const pct = ((value - min) / (max - min)) * 100;
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
       <div className="mb-4 flex items-center justify-between">
-        <span className="text-[13.5px] font-semibold text-neutral-700">{label}</span>
-        <span className="rounded-full bg-emerald-50 px-3 py-1 text-[13px] font-bold text-emerald-700">
+        <span className="text-[13.5px] font-bold text-slate-800">{label}</span>
+        <span className="rounded-lg bg-indigo-600 px-3 py-1 text-[12px] font-bold text-white shadow-sm">
           {value} {unit}
         </span>
       </div>
@@ -148,10 +149,10 @@ function Slider({ label, min, max, value, unit, onChange }) {
         onChange={(e) => onChange(Number(e.target.value))}
         className="range-input w-full"
         style={{
-          background: `linear-gradient(to right, #10b981 ${pct}%, #e5e7eb ${pct}%)`,
+          background: `linear-gradient(to right, #4f46e5 ${pct}%, #e2e8f0 ${pct}%)`,
         }}
       />
-      <div className="mt-2 flex justify-between text-[11.5px] font-medium text-neutral-400">
+      <div className="mt-2 flex justify-between text-[11.5px] font-medium text-slate-400">
         <span>
           {min} {unit}
         </span>
@@ -167,122 +168,40 @@ function Slider({ label, min, max, value, unit, onChange }) {
 /*  Left panel                                                        */
 /* ------------------------------------------------------------------ */
 
-function LeftPanel({ step }) {
+function LeftPanel({ step, data }) {
   return (
-    <div className="relative flex h-full flex-col justify-between overflow-hidden bg-gradient-to-b from-emerald-50/70 via-white to-emerald-50/50 px-8 py-8 lg:px-10 lg:py-10">
-      {/* ambient blobs */}
-      <div className="pointer-events-none absolute -left-24 -top-24 h-64 w-64 rounded-full bg-emerald-200/30 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-28 -right-16 h-72 w-72 rounded-full bg-emerald-100/50 blur-3xl" />
-
+    <aside className="relative flex h-full flex-col overflow-hidden bg-slate-950 px-6 py-7 text-white lg:px-8 lg:py-9">
+      <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-indigo-500/25 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 -left-24 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" />
       <div className="relative">
-        {/* Branding */}
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
-            <Sparkles className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-[15px] font-bold tracking-tight text-neutral-900">
-            InterviewAI
-          </span>
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-400 to-violet-600 shadow-lg shadow-indigo-900/60"><BrainCircuit className="h-5 w-5 text-white" /></div>
+          <div><span className="block text-[15px] font-bold tracking-tight">InterviewAI</span><span className="text-[10px] font-bold tracking-[0.16em] text-slate-400">PRACTICE STUDIO</span></div>
         </div>
-        <p className="mt-1.5 text-[12.5px] text-neutral-500">
-          Your personalized interview starts here.
-        </p>
-
-        {/* Hero */}
-        <h1 className="mt-9 text-[32px] font-extrabold leading-[1.15] tracking-tight text-neutral-900">
-          Build your <span className="text-emerald-600">perfect interview.</span>
-        </h1>
-        <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-neutral-500">
-          Customize your interview based on your role, experience, technical
-          focus and goals.
-        </p>
-
-        {/* Stepper */}
-        <div className="mt-10">
+        <div className="mt-9 hidden lg:block">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-300">Guided setup</p>
+          <h1 className="mt-3 text-[30px] font-bold leading-[1.15] tracking-tight">Shape a practice session that feels like the real thing.</h1>
+          <p className="mt-3 max-w-sm text-[13px] leading-relaxed text-slate-400">Set your focus, calibrate the challenge, and let the interviewer adapt to your goals.</p>
+        </div>
+        <div className="mt-7 lg:mt-10">
           {STEPS.map((s, idx) => {
             const isCompleted = s.id < step;
             const isActive = s.id === step;
             const isLast = idx === STEPS.length - 1;
             return (
-              <div key={s.id} className="relative flex gap-4 pb-7 last:pb-0">
-                {!isLast && (
-                  <span className="absolute left-[15px] top-8 h-[calc(100%-1.5rem)] w-[2px] overflow-hidden rounded-full bg-neutral-200">
-                    <motion.span
-                      className="block w-full bg-emerald-500"
-                      initial={false}
-                      animate={{ height: isCompleted ? "100%" : "0%" }}
-                      transition={{ duration: 0.4, ease: "easeInOut" }}
-                    />
-                  </span>
-                )}
-                <div className="relative z-10 shrink-0">
-                  <motion.div
-                    animate={{
-                      scale: isActive ? 1.08 : 1,
-                      boxShadow: isActive
-                        ? "0 0 0 6px rgba(16,185,129,0.15)"
-                        : "0 0 0 0px rgba(16,185,129,0)",
-                    }}
-                    transition={{ duration: 0.25 }}
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-[12.5px] font-bold transition-colors duration-300 ${
-                      isCompleted
-                        ? "border-emerald-500 bg-emerald-500 text-white"
-                        : isActive
-                        ? "border-emerald-500 bg-white text-emerald-600"
-                        : "border-neutral-300 bg-white text-neutral-400"
-                    }`}
-                  >
-                    {isCompleted ? (
-                      <Check className="h-4 w-4" strokeWidth={3} />
-                    ) : (
-                      String(s.id).padStart(2, "0")
-                    )}
-                  </motion.div>
-                </div>
-                <div className="pt-1">
-                  <div
-                    className={`text-[14px] font-semibold transition-colors ${
-                      isActive
-                        ? "text-emerald-800"
-                        : isCompleted
-                        ? "text-neutral-700"
-                        : "text-neutral-400"
-                    }`}
-                  >
-                    {s.title}
-                  </div>
-                  <div
-                    className={`mt-0.5 text-[12.5px] ${
-                      isActive ? "text-neutral-500" : "text-neutral-400"
-                    }`}
-                  >
-                    {s.desc}
-                  </div>
-                </div>
+              <div key={s.id} className="relative flex gap-3 pb-5 last:pb-0">
+                {!isLast && <span className="absolute left-[13px] top-7 h-[calc(100%-1rem)] w-px overflow-hidden rounded-full bg-slate-700"><motion.span className="block w-full bg-indigo-400" initial={false} animate={{ height: isCompleted ? "100%" : "0%" }} transition={{ duration: 0.4, ease: "easeInOut" }} /></span>}
+                <motion.div animate={{ scale: isActive ? 1.08 : 1, boxShadow: isActive ? "0 0 0 5px rgba(129,140,248,0.16)" : "0 0 0 0px rgba(129,140,248,0)" }} transition={{ duration: 0.25 }} className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${isCompleted ? "border-indigo-400 bg-indigo-400 text-white" : isActive ? "border-indigo-300 bg-indigo-400/10 text-indigo-200" : "border-slate-700 bg-slate-900 text-slate-500"}`}>
+                  {isCompleted ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : String(s.id).padStart(2, "0")}
+                </motion.div>
+                <div className="pt-0.5"><div className={`text-[13px] font-semibold ${isActive ? "text-white" : isCompleted ? "text-slate-300" : "text-slate-500"}`}>{s.title}</div><div className={`mt-0.5 hidden text-[11px] lg:block ${isActive ? "text-slate-400" : "text-slate-600"}`}>{s.desc}</div></div>
               </div>
             );
           })}
         </div>
       </div>
-
-      {/* Supporting card */}
-      <div className="relative mt-8 rounded-2xl border border-emerald-100 bg-white/80 p-4 backdrop-blur-sm">
-        <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
-            <Sparkles className="h-4 w-4 text-emerald-600" />
-          </div>
-          <div>
-            <div className="text-[13px] font-semibold text-neutral-800">
-              AI-powered interview setup
-            </div>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-neutral-500">
-              Your selections will be used to create a personalized interview
-              experience tailored to your goals.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+      <div className="relative mt-auto hidden rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm lg:block"><div className="flex items-center gap-2 text-[12px] font-bold text-slate-200"><ShieldCheck className="h-4 w-4 text-cyan-300" />Personalized, private practice</div><p className="mt-2 text-[11.5px] leading-relaxed text-slate-400">{data.role ? `${data.role} interview profile in progress.` : "Your selections stay in this secure setup session."}</p></div>
+    </aside>
   );
 }
 
@@ -412,7 +331,7 @@ function StepThree({ data, update, errors }) {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.85 }}
                     transition={{ duration: 0.15 }}
-                    className="flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-[12.5px] font-medium text-white"
+                    className="flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-[12.5px] font-medium text-white"
                   >
                     {t}
                     <button
@@ -445,8 +364,8 @@ function StepThree({ data, update, errors }) {
                 onClick={() => toggleTopic(t)}
                 className={`rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all duration-150 ${
                   selected
-                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                    : "border-neutral-200 bg-white text-neutral-600 hover:border-emerald-300 hover:bg-emerald-50/40"
+                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/40"
                 }`}
               >
                 {selected ? "✓ " : ""}
@@ -467,12 +386,12 @@ function StepThree({ data, update, errors }) {
             onChange={(e) => setCustomTopic(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustom())}
             placeholder="e.g. GraphQL, Docker..."
-            className="flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-[14px] text-neutral-800 placeholder:text-neutral-400 outline-none transition-colors focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[14px] text-slate-800 placeholder:text-slate-400 outline-none transition-colors focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
           />
           <button
             type="button"
             onClick={addCustom}
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-emerald-700"
+            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-[13.5px] font-semibold text-white transition-colors hover:bg-indigo-700"
           >
             <Plus className="h-4 w-4" />
             Add Topic
@@ -506,19 +425,19 @@ function CreditCostPreview({ numberOfQuestions, userCredits, planAllowance, onUp
     <div
       className={`rounded-2xl border p-4 ${
         sufficient
-          ? "border-emerald-200 bg-emerald-50/60"
+          ? "border-indigo-200 bg-indigo-50/60"
           : "border-rose-200 bg-rose-50/60"
       }`}
     >
       <div className="flex items-center gap-2 mb-3">
-        <Zap className={`h-4 w-4 ${sufficient ? "text-emerald-600" : "text-rose-500"}`} />
+        <Zap className={`h-4 w-4 ${sufficient ? "text-indigo-600" : "text-rose-500"}`} />
         <span className="text-[13px] font-bold text-neutral-700 uppercase tracking-wide">
           Credit Summary
         </span>
       </div>
       <div className="grid grid-cols-2 gap-y-2.5">
         <div className="text-[13px] text-neutral-500">Interview cost</div>
-        <div className={`text-[13px] font-bold text-right ${sufficient ? "text-emerald-700" : "text-rose-600"}`}>
+        <div className={`text-[13px] font-bold text-right ${sufficient ? "text-indigo-700" : "text-rose-600"}`}>
           {cost} credits
         </div>
         <div className="text-[13px] text-neutral-500">Available credits</div>
@@ -528,7 +447,7 @@ function CreditCostPreview({ numberOfQuestions, userCredits, planAllowance, onUp
         {sufficient ? (
           <>
             <div className="text-[13px] text-neutral-500">Remaining after</div>
-            <div className="text-[13px] font-semibold text-right text-emerald-700">
+            <div className="text-[13px] font-semibold text-right text-indigo-700">
               {remaining.toLocaleString()} credits
             </div>
           </>
@@ -546,7 +465,7 @@ function CreditCostPreview({ numberOfQuestions, userCredits, planAllowance, onUp
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
           <div
             className={`h-full rounded-full transition-all duration-500 ${
-              sufficient ? "bg-emerald-500" : "bg-rose-400"
+              sufficient ? "bg-indigo-500" : "bg-rose-400"
             }`}
             style={{ width: `${Math.min((userCredits / planAllowance) * 100, 100)}%` }}
           />
@@ -630,19 +549,19 @@ function StepFive({ data, update, errors }) {
             onDrop={onDrop}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-colors duration-200 ${
               dragging
-                ? "border-emerald-500 bg-emerald-50"
-                : "border-neutral-250 bg-neutral-50/60 hover:border-emerald-300 hover:bg-emerald-50/40"
+                ? "border-indigo-500 bg-indigo-50"
+                : "border-slate-200 bg-slate-50/60 hover:border-indigo-300 hover:bg-indigo-50/40"
             }`}
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
-              <Upload className="h-5 w-5 text-emerald-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100">
+              <Upload className="h-5 w-5 text-indigo-600" />
             </div>
             <p className="mt-4 text-[15px] font-semibold text-neutral-800">
               Upload Resume
             </p>
             <p className="mt-1 text-[13.5px] text-neutral-500">
               Drag & drop your resume here, or{" "}
-              <span className="font-semibold text-emerald-600">Browse</span>
+              <span className="font-semibold text-indigo-600">Browse</span>
             </p>
             <p className="mt-3 text-[12px] font-medium tracking-wide text-neutral-400">
               PDF / DOC / DOCX
@@ -665,14 +584,14 @@ function StepFive({ data, update, errors }) {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4"
+          className="flex items-center justify-between rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-4"
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600">
               <FileText className="h-5 w-5 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5 text-[14px] font-semibold text-emerald-800">
+              <div className="flex items-center gap-1.5 text-[14px] font-semibold text-indigo-800">
                 <Check className="h-3.5 w-3.5" strokeWidth={3} />
                 {data.resume.name}
               </div>
@@ -680,7 +599,7 @@ function StepFive({ data, update, errors }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-neutral-600 transition-colors hover:border-emerald-300">
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-slate-600 transition-colors hover:border-indigo-300">
               <RefreshCw className="h-3.5 w-3.5" />
               Replace
               <input
@@ -904,7 +823,7 @@ export default function InterviewSetup() {
   };
 
   return (
-    <div className="flex h-screen w-full flex-col bg-neutral-50 lg:flex-row">
+    <div className="min-h-screen w-full bg-slate-100 p-0 lg:p-5">
       <style>{`
         .range-input {
           -webkit-appearance: none;
@@ -920,7 +839,7 @@ export default function InterviewSetup() {
           width: 18px;
           border-radius: 9999px;
           background: #ffffff;
-          border: 3px solid #10b981;
+          border: 3px solid #4f46e5;
           box-shadow: 0 1px 3px rgba(0,0,0,0.15);
           cursor: pointer;
           margin-top: -6px;
@@ -934,7 +853,7 @@ export default function InterviewSetup() {
           width: 18px;
           border-radius: 9999px;
           background: #ffffff;
-          border: 3px solid #10b981;
+          border: 3px solid #4f46e5;
           box-shadow: 0 1px 3px rgba(0,0,0,0.15);
           cursor: pointer;
         }
@@ -945,27 +864,24 @@ export default function InterviewSetup() {
         }
       `}</style>
 
-      {/* LEFT — 40% */}
-      <div className="w-full lg:h-full lg:w-[40%]">
-        <LeftPanel step={step} />
+      <div className="mx-auto flex min-h-screen w-full max-w-[1480px] flex-col overflow-hidden bg-white lg:min-h-[calc(100vh-2.5rem)] lg:flex-row lg:rounded-[28px] lg:shadow-2xl lg:shadow-slate-900/10">
+      {/* Progress rail */}
+      <div className="w-full lg:w-[34%]">
+        <LeftPanel step={step} data={data} />
       </div>
 
-      {/* RIGHT — 60% */}
-      <div className="flex w-full flex-1 flex-col lg:h-full lg:w-[60%]">
-        <div className="mx-auto flex h-full w-full max-w-2xl flex-col px-6 py-8 lg:px-12 lg:py-12">
+      {/* Setup canvas */}
+      <div className="flex w-full flex-1 flex-col bg-[radial-gradient(circle_at_top_right,_rgba(224,231,255,0.7),_transparent_30%)] lg:w-[66%]">
+        <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-5 py-7 sm:px-8 lg:px-12 lg:py-10">
           {/* Progress header */}
           <div>
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-semibold text-neutral-500">
-                Step {step} of {STEPS.length}
-              </span>
-              <span className="text-[13px] font-bold text-emerald-600">
-                {Math.round(pct)}%
-              </span>
+              <div><span className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">Interview blueprint</span><p className="mt-1 text-[13px] font-semibold text-slate-600">Step {step} of {STEPS.length}</p></div>
+              <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-[12px] font-bold text-indigo-700">{Math.round(pct)}% complete</span>
             </div>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
               <motion.div
-                className="h-full rounded-full bg-emerald-500"
+                className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-violet-500"
                 animate={{ width: `${pct}%` }}
                 transition={{ duration: 0.4, ease: "easeInOut" }}
               />
@@ -973,7 +889,7 @@ export default function InterviewSetup() {
           </div>
 
           {/* Step content */}
-          <div className="mt-8 flex-1 overflow-y-auto pr-1">
+          <div className="mt-7 flex-1 overflow-y-auto pr-1 lg:pr-3">
             <AnimatePresence mode="wait" custom={direction}>
               <motion.div
                 key={step}
@@ -984,12 +900,12 @@ export default function InterviewSetup() {
                 exit="exit"
                 transition={{ duration: 0.25, ease: "easeInOut" }}
               >
-                <h2 className="text-[24px] font-bold tracking-tight text-neutral-900">
+                <h2 className="text-[27px] font-bold tracking-tight text-slate-950">
                   {current.title}
                 </h2>
-                <p className="mt-1.5 text-[14px] text-neutral-500">{current.desc}</p>
+                <p className="mt-2 text-[14px] leading-relaxed text-slate-500">{current.desc}</p>
 
-                <div className="mt-7">
+                <div className="mt-7 rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_20px_45px_-35px_rgba(15,23,42,0.45)] sm:p-7">
                   {step === 1 && <StepOne data={data} update={update} errors={errors} />}
                   {step === 2 && <StepTwo data={data} update={update} errors={errors} />}
                   {step === 3 && <StepThree data={data} update={update} errors={errors} />}
@@ -1010,12 +926,12 @@ export default function InterviewSetup() {
           </div>
 
           {/* Bottom nav */}
-          <div className="mt-8 flex items-center justify-between border-t border-neutral-200 pt-6">
+          <div className="mt-7 flex items-center justify-between border-t border-slate-200 pt-5">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={resetForm}
-                className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[14px] font-semibold text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100"
+                className="hidden items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] font-semibold text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 sm:flex"
               >
                 <RefreshCw className="h-4 w-4" />
                 Reset
@@ -1024,7 +940,7 @@ export default function InterviewSetup() {
                 <button
                   type="button"
                   onClick={goBack}
-                  className="flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-5 py-2.5 text-[14px] font-semibold text-neutral-600 transition-colors hover:border-neutral-300 hover:bg-neutral-50"
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-600 transition-colors hover:border-indigo-200 hover:bg-indigo-50"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Back
@@ -1041,7 +957,7 @@ export default function InterviewSetup() {
                   userCredits !== null &&
                   userCredits < getCreditCost(data.numberOfQuestions))
               }
-              className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-6 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-[14px] font-semibold text-white shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5 hover:bg-indigo-700 hover:shadow-indigo-300 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {submitting ? (
                 <>
@@ -1082,6 +998,7 @@ export default function InterviewSetup() {
           ) : null}
         </div>
       </div>
+    </div>
     </div>
   );
 }
