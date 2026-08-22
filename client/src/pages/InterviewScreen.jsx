@@ -20,13 +20,15 @@ import { getInterviewerVideo, getInterviewerVoice } from "../services/interviewe
 import { useAntiCheating } from "../hooks/useAntiCheating";
 
 /**
- * AI Smart Interview — Full-screen Interview Screen
+ * AI Smart Interview — Interview Studio
  * Single-file React component. Plain CSS-in-JS via a <style> tag (no Tailwind).
  * Replace the placeholder <img src="/interviewer-image.jpg" /> with your real asset.
  *
- * Layout: exact 50/50 split, no outer wrapping card.
- * LEFT  = full-bleed interviewer image (50vw x 100vh)
- * RIGHT = independent workspace (status card, question, answer, feedback)
+ * Layout: editorial "interview studio" — sticky header with identity/progress/timer/security,
+ * a centered transcript-style question + response stage, and a slim sticky interviewer
+ * sidebar (video, speaking/listening state, gender control, monitoring detail).
+ * All existing state, effects, handlers, refs, and API calls are unchanged — only the
+ * presentation layer (JSX structure + styles) has been redesigned.
  */
 
 // questionTime (seconds) can later come from interview config/API per question.
@@ -37,6 +39,10 @@ function formatTime(totalSeconds) {
   const mins = Math.floor(safe / 60);
   const secs = safe % 60;
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
 }
 
 function normalizeQuestion(question, index) {
@@ -967,6 +973,11 @@ export default function InterviewScreen() {
   }, [answers, currentIndex]);
 
   const interviewTopics = Array.isArray(interview?.topics) ? interview.topics : [];
+  const totalQuestions = interviewQuestions.length;
+  const answeredWordCount = currentAnswer.trim() ? currentAnswer.trim().split(/\s+/).length : 0;
+  const violationTotal =
+    tabSwitchCount + fullscreenExitCount + copyAttemptCount + pasteAttemptCount + cutAttemptCount;
+  const aiStateLabel = isSpeaking ? "AI is speaking" : isListening ? "Listening to you" : null;
 
   // ── Cheating termination screen — rendered before everything else ──────────
   if (cheatingTerminated) {
@@ -978,8 +989,9 @@ export default function InterviewScreen() {
           .termination-screen {
             position: fixed; inset: 0;
             background:
-              radial-gradient(circle at 50% 18%, rgba(239,68,68,0.18), transparent 28rem),
-              linear-gradient(135deg, #070b14, #111827 58%, #151018);
+              radial-gradient(circle at 50% 18%, rgba(16,185,129,0.10), transparent 30rem),
+              radial-gradient(circle at 50% 18%, rgba(239,68,68,0.16), transparent 26rem),
+              linear-gradient(160deg, #060f0c, #0a1512 55%, #120b0b);
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
             gap: 18px; padding: 32px;
@@ -994,17 +1006,17 @@ export default function InterviewScreen() {
             border: 1px solid rgba(248,113,113,0.26);
             box-shadow: 0 24px 70px rgba(0,0,0,0.35);
           }
-          .termination-title { font-size: clamp(30px, 5vw, 44px); font-weight: 850; color: #f8fafc; margin: 0; letter-spacing: 0; }
-          .termination-subtitle { font-size: 15px; font-weight: 750; color: #fca5a5; margin: 0; }
+          .termination-title { font-size: clamp(30px, 5vw, 44px); font-weight: 800; color: #f6faf8; margin: 0; letter-spacing: -0.01em; }
+          .termination-subtitle { font-size: 15px; font-weight: 700; color: #fca5a5; margin: 0; }
           .termination-reason {
-            font-size: 14px; color: #cbd5e1; max-width: 460px; line-height: 1.7;
-            background: rgba(15,23,42,0.7); border: 1px solid rgba(248,113,113,0.22);
-            border-radius: 8px; padding: 16px 20px; margin: 0;
+            font-size: 14px; color: #cdd8d2; max-width: 460px; line-height: 1.7;
+            background: rgba(15,30,25,0.7); border: 1px solid rgba(248,113,113,0.22);
+            border-radius: 10px; padding: 16px 20px; margin: 0;
           }
-          .termination-redirect { font-size: 13px; color: #64748b; margin: 0; }
+          .termination-redirect { font-size: 13px; color: #63756d; margin: 0; }
           .termination-home-btn {
-            margin-top: 4px; background: #ffffff; color: #111827;
-            border: none; border-radius: 8px; padding: 14px 24px;
+            margin-top: 4px; background: #ffffff; color: #0e1f1a;
+            border: none; border-radius: 10px; padding: 14px 24px;
             display: inline-flex; align-items: center; justify-content: center; gap: 8px;
             font-size: 15px; font-weight: 800; cursor: pointer;
             transition: opacity 0.15s ease, transform 0.15s ease;
@@ -1031,369 +1043,422 @@ export default function InterviewScreen() {
   }
 
   return (
-    <div className="ai-interview-screen">
+    <div className="studio">
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap');
+
         * { box-sizing: border-box; }
+        html, body, #root { margin: 0; padding: 0; height: 100%; }
 
-        html, body, #root {
-          margin: 0;
-          padding: 0;
-        }
+        .studio {
+          --ink: #0e1f1a;
+          --muted: #5b6d64;
+          --faint: #93a49b;
+          --paper: #f5f9f6;
+          --panel: #ffffff;
+          --line: #e0ece4;
+          --line-strong: #c7dbcd;
+          --moss: #0f3d2e;
+          --emerald: #12855f;
+          --emerald-dark: #0b6249;
+          --emerald-soft: #e8f6ee;
+          --mint: #eefcf4;
+          --amber: #b6650a;
+          --amber-soft: #fdf3e2;
+          --red: #c0392b;
+          --red-soft: #fbeae7;
+          --shadow: 0 18px 46px rgba(13, 40, 30, 0.08);
+          --shadow-lg: 0 26px 70px rgba(13, 40, 30, 0.12);
+          --radius: 14px;
+          --radius-sm: 10px;
 
-        .ai-interview-screen {
           width: 100vw;
           height: 100vh;
           display: flex;
-          background: #ffffff;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-            "Helvetica Neue", Arial, sans-serif;
+          flex-direction: column;
+          background: var(--paper);
+          color: var(--ink);
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           overflow: hidden;
         }
 
-        /* ---------- LEFT: FULL-BLEED INTERVIEWER IMAGE ---------- */
-        .interview-left {
-          width: 50vw;
-          height: 100vh;
+        .studio * { font-family: inherit; }
+
+        /* ================= HEADER ================= */
+        .studio-header {
           flex-shrink: 0;
-          background: #e5e7eb;
-          position: relative;
-        }
-
-        .interview-left img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-
-        .interviewer-video {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-
-        /* ---------- GENDER SWITCHER ---------- */
-        .gender-switcher {
-          position: absolute;
-          bottom: 20px;
-          left: 50%;
-          transform: translateX(-50%);
           display: flex;
-          background: rgba(255, 255, 255, 0.18);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.35);
-          border-radius: 9999px;
-          padding: 4px;
-          gap: 4px;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-          z-index: 10;
-        }
-
-        .gender-btn {
-          border: none;
-          border-radius: 9999px;
-          padding: 7px 18px;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
-          background: transparent;
-          color: rgba(255, 255, 255, 0.85);
-          white-space: nowrap;
-        }
-
-        .gender-btn.active {
-          background: #ffffff;
-          color: #065f46;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
-        }
-
-        .gender-btn:not(.active):hover {
-          background: rgba(255, 255, 255, 0.22);
-          color: #ffffff;
-        }
-
-        /* ---------- RIGHT: INDEPENDENT WORKSPACE ---------- */
-        .interview-right {
-          width: 50vw;
-          height: 100vh;
-          background: #f7f8f9;
-          padding: 24px 32px;
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-          overflow-y: auto;
-          position: relative;
-        }
-
-        .right-top-row {
-          display: flex;
+          align-items: center;
           justify-content: space-between;
-          align-items: flex-start;
-          gap: 16px;
+          gap: 20px;
+          padding: 14px 28px;
+          background: var(--panel);
+          border-bottom: 1px solid var(--line);
+          z-index: 20;
         }
 
-        .interview-info {
-          flex: 1;
+        .studio-brand {
+          display: flex;
+          align-items: center;
+          gap: 12px;
           min-width: 0;
-          background: linear-gradient(180deg, #ffffff 0%, #f8fffc 100%);
-          border: 1px solid #d1fae5;
-          border-radius: 14px;
-          padding: 14px 16px;
-          box-shadow: 0 1px 8px rgba(15, 23, 42, 0.04);
         }
 
-        .interview-info.loading,
-        .interview-info.error {
-          display: flex;
+        .studio-brand-mark {
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          flex-shrink: 0;
+          display: inline-flex;
           align-items: center;
-          min-height: 88px;
-          font-size: 13px;
-          color: #6b7280;
+          justify-content: center;
+          color: #eafff3;
+          background: linear-gradient(150deg, var(--moss), var(--emerald));
+          box-shadow: 0 10px 22px rgba(15, 61, 46, 0.28);
         }
 
-        .interview-info.error {
-          color: #b45309;
-          background: #fffbeb;
-          border-color: #fcd34d;
-        }
-
-        .interview-role {
-          font-size: 22px;
-          font-weight: 700;
-          line-height: 1.15;
-          color: #059669;
+        .studio-brand-name {
           margin: 0;
+          font-size: 10.5px;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          color: var(--emerald-dark);
         }
 
-        .interview-meta {
-          margin-top: 6px;
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px 10px;
-          font-size: 12.5px;
-          color: #374151;
+        .studio-brand-role {
+          margin: 2px 0 0;
+          font-size: 14.5px;
+          font-weight: 750;
+          color: var(--ink);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 46vw;
         }
 
-        .interview-meta span {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .interview-difficulty {
-          margin-top: 6px;
-          font-size: 12.5px;
-          color: #374151;
-        }
-
-        .interview-difficulty strong,
-        .interview-topics-label {
-          color: #065f46;
-          font-weight: 600;
-        }
-
-        .interview-topics {
-          margin-top: 8px;
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .interview-topics-label {
-          font-size: 12.5px;
-          margin-right: 2px;
-        }
-
-        .interview-topic-chip {
-          display: inline-flex;
-          align-items: center;
-          border-radius: 9999px;
-          background: #ecfdf5;
-          border: 1px solid #a7f3d0;
-          color: #047857;
-          padding: 4px 10px;
-          font-size: 12px;
-          font-weight: 600;
-        }
-
-        /* ---------- STATUS CARD: SMALL, TOP-RIGHT ---------- */
-        .status-card {
-          background: #ffffff;
-          border-radius: 12px;
-          border: 1px solid #eef0f2;
-          box-shadow: 0 1px 8px rgba(15, 23, 42, 0.05);
-          padding: 12px 16px;
-          width: 168px;
-          flex-shrink: 0;
-        }
-
-        .status-heading {
-          font-size: 11px;
-          font-weight: 600;
-          color: #6b7280;
-          margin: 0 0 8px 0;
-          text-align: right;
-        }
-
-        .status-timer-row {
+        .studio-progress {
           display: flex;
           align-items: center;
-          justify-content: center;
-          gap: 8px;
-          margin-bottom: 8px;
+          gap: 14px;
         }
 
-        .timer-ring {
-          --ring-color: #10b981;
-          width: 46px;
-          height: 46px;
-          border-radius: 50%;
-          flex-shrink: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: conic-gradient(
-            var(--ring-color) calc(var(--progress) * 1deg),
-            #e5e7eb 0deg
-          );
-          transition: background 0.3s linear;
-        }
-
-        .timer-ring.low {
-          --ring-color: #d97706;
-        }
-
-        .timer-ring.critical {
-          --ring-color: #dc2626;
-        }
-
-        .timer-ring-inner {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: #ffffff;
-        }
-
-        .timer-text {
-          font-size: 15px;
-          font-weight: 700;
-          color: #111827;
+        .studio-progress-count {
           font-variant-numeric: tabular-nums;
-        }
-
-        .timer-text.low {
-          color: #d97706;
-        }
-
-        .timer-text.critical {
-          color: #dc2626;
-        }
-
-        .status-question-count {
-          text-align: center;
-          font-size: 12px;
-          font-weight: 600;
-          color: #374151;
-        }
-
-        .status-question-count span {
-          color: #10b981;
-        }
-
-        /* ---------- QUESTION CARD ---------- */
-        .question-card {
-          background: #ffffff;
-          border: 1px solid #eef0f2;
-          border-radius: 14px;
-          box-shadow: 0 1px 8px rgba(15, 23, 42, 0.04);
-          padding: 18px 20px;
-          flex-shrink: 0;
-        }
-
-        .question-header-row {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .question-of {
-          font-size: 12px;
-          color: #9ca3af;
-          margin: 0 0 6px 0;
-        }
-
-        .question-text {
           font-size: 15px;
-          font-weight: 600;
-          color: #111827;
-          line-height: 1.5;
-          margin: 0;
-        }
-
-        .read-question-btn {
-          flex-shrink: 0;
-          border: 1px solid #a7f3d0;
-          background: #ecfdf5;
-          color: #047857;
-          border-radius: 9999px;
-          padding: 8px 12px;
-          font-size: 12px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+          font-weight: 800;
+          color: var(--ink);
           white-space: nowrap;
         }
 
-        .read-question-btn:hover:not(:disabled) {
-          transform: translateY(-1px);
-          background: #d1fae5;
+        .studio-progress-count em {
+          font-style: normal;
+          font-weight: 650;
+          color: var(--faint);
+          margin-left: 2px;
         }
 
-        .read-question-btn:disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
+        .studio-progress-track {
+          display: flex;
+          gap: 4px;
         }
 
-        .read-question-btn.speaking {
-          background: #d1fae5;
-          border-color: #6ee7b7;
+        .studio-progress-dot {
+          width: 18px;
+          height: 4px;
+          border-radius: 999px;
+          background: var(--line-strong);
+          transition: background 0.2s ease, width 0.2s ease;
         }
 
-        .read-question-fallback {
-          margin: 8px 0 0 0;
+        .studio-progress-dot.done { background: var(--emerald); }
+        .studio-progress-dot.active { background: var(--moss); width: 26px; }
+
+        .studio-header-right {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+
+        .studio-timer {
+          position: relative;
+          overflow: hidden;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 14px;
+          border-radius: 999px;
+          background: var(--emerald-soft);
+          border: 1px solid rgba(18, 133, 95, 0.22);
+          font-variant-numeric: tabular-nums;
+          font-size: 13px;
+          font-weight: 800;
+          color: var(--emerald-dark);
+        }
+
+        .studio-timer-bar {
+          position: absolute;
+          left: 0; bottom: 0;
+          height: 2px;
+          width: calc(var(--p, 1) * 100%);
+          background: var(--emerald);
+          transition: width 1s linear;
+        }
+
+        .studio-timer.low { background: var(--amber-soft); border-color: rgba(182,101,10,0.28); color: var(--amber); }
+        .studio-timer.low .studio-timer-bar { background: var(--amber); }
+        .studio-timer.critical { background: var(--red-soft); border-color: rgba(192,57,43,0.3); color: var(--red); animation: pulse-soft 1s ease-in-out infinite; }
+        .studio-timer.critical .studio-timer-bar { background: var(--red); }
+
+        .studio-security {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: #f1f5f2;
+          border: 1px solid var(--line-strong);
           font-size: 12px;
-          color: #6b7280;
+          font-weight: 800;
+          color: var(--muted);
         }
 
-        /* ---------- DSA PROBLEM STATEMENT ---------- */
-        .dsa-problem {
-          margin-top: 14px;
+        .studio-security::before {
+          content: "";
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: var(--faint);
+        }
+
+        .studio-security.flagged {
+          background: var(--amber-soft);
+          border-color: rgba(182,101,10,0.28);
+          color: var(--amber);
+        }
+
+        .studio-security.flagged::before { background: var(--amber); }
+
+        /* ================= META STRIP ================= */
+        .studio-meta-strip {
+          flex-shrink: 0;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 28px;
+          background: var(--mint);
+          border-bottom: 1px solid var(--line);
+          font-size: 12.5px;
+          font-weight: 700;
+          color: var(--muted);
+        }
+
+        .studio-meta-strip.loading,
+        .studio-meta-strip.error {
+          color: var(--muted);
+        }
+
+        .studio-meta-strip.error {
+          background: var(--red-soft);
+          color: var(--red);
+          border-color: rgba(192,57,43,0.2);
+        }
+
+        .meta-chip {
+          display: inline-flex;
+          align-items: center;
+          padding: 5px 11px;
+          border-radius: 999px;
+          background: var(--panel);
+          border: 1px solid var(--line-strong);
+          color: var(--moss);
+        }
+
+        .meta-chip.accent {
+          background: var(--emerald-soft);
+          border-color: rgba(18,133,95,0.24);
+          color: var(--emerald-dark);
+        }
+
+        /* ================= FULLSCREEN BANNER ================= */
+        .fullscreen-banner {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px 28px;
+          background: var(--amber-soft);
+          border-bottom: 1px solid rgba(182,101,10,0.24);
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--amber);
+        }
+
+        .fullscreen-banner-msg {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .return-fullscreen-btn {
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: var(--amber);
+          color: #ffffff;
+          border: none;
+          border-radius: 8px;
+          padding: 8px 14px;
+          font-size: 12px;
+          font-weight: 800;
+          cursor: pointer;
+          transition: opacity 0.15s ease;
+        }
+
+        .return-fullscreen-btn:hover { opacity: 0.88; }
+
+        /* ================= MAIN ================= */
+        .studio-main {
+          position: relative;
+          flex: 1;
+          min-height: 0;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 300px;
+        }
+
+        /* ---- STAGE ---- */
+        .studio-stage {
+          min-width: 0;
+          overflow-y: auto;
+          padding: 40px 32px 120px;
+        }
+
+        .studio-stage::-webkit-scrollbar { width: 10px; }
+        .studio-stage::-webkit-scrollbar-track { background: transparent; }
+        .studio-stage::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; border: 3px solid var(--paper); }
+
+        .stage-inner {
+          max-width: 760px;
+          margin: 0 auto;
           display: flex;
           flex-direction: column;
+          gap: 28px;
+        }
+
+        .question-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
           gap: 12px;
-          font-size: 13.5px;
-          color: #1f2937;
-          line-height: 1.65;
+          flex-wrap: wrap;
         }
 
-        .dsa-section-label {
-          font-size: 11px;
+        .question-index {
+          font-family: 'Source Serif 4', Georgia, serif;
+          font-size: 13px;
           font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.07em;
-          color: #059669;
-          margin: 0 0 4px 0;
+          letter-spacing: 0.05em;
+          color: var(--emerald-dark);
         }
 
-        .dsa-description {
-          white-space: pre-wrap;
+        .question-top-right {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .ai-state-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 12px;
+          font-weight: 750;
+          color: var(--emerald-dark);
+        }
+
+        .ai-state-pill::before {
+          content: "";
+          width: 7px; height: 7px;
+          border-radius: 50%;
+          background: var(--emerald);
+          animation: pulse-soft 1.3s ease-in-out infinite;
+        }
+
+        .read-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          border: 1px solid var(--line-strong);
+          background: var(--panel);
+          color: var(--moss);
+          border-radius: 999px;
+          padding: 8px 14px;
+          font-size: 12.5px;
+          font-weight: 750;
+          cursor: pointer;
+          transition: all 0.16s ease;
+        }
+
+        .read-toggle:hover:not(:disabled) {
+          border-color: var(--emerald);
+          color: var(--emerald-dark);
+        }
+
+        .read-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .read-toggle.active {
+          background: var(--moss);
+          border-color: var(--moss);
+          color: #eafff3;
+        }
+
+        .question-heading {
+          font-family: 'Source Serif 4', Georgia, serif;
+          font-size: clamp(24px, 3vw, 34px);
+          line-height: 1.4;
+          font-weight: 650;
+          color: var(--ink);
           margin: 0;
-          color: #374151;
+          letter-spacing: -0.01em;
+        }
+
+        .hint-text {
+          margin: 0;
+          font-size: 12.5px;
+          color: var(--faint);
+        }
+
+        .hint-text.warning {
+          color: var(--amber);
+        }
+
+        /* ---- DSA BLOCK ---- */
+        .dsa-block {
+          margin-top: 6px;
+          padding-top: 22px;
+          border-top: 1px solid var(--line);
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .dsa-row-label {
+          margin: 0 0 6px;
+          font-size: 10.5px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--emerald-dark);
+        }
+
+        .dsa-text {
+          margin: 0;
+          font-size: 14px;
+          line-height: 1.7;
+          color: #33443c;
+          white-space: pre-wrap;
         }
 
         .dsa-examples {
@@ -1403,14 +1468,14 @@ export default function InterviewScreen() {
         }
 
         .dsa-example-block {
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          padding: 10px 14px;
+          background: #0f1f1a;
+          color: #d6f5e6;
+          border-radius: var(--radius-sm);
+          padding: 12px 16px;
           font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
           font-size: 12.5px;
           white-space: pre-wrap;
-          color: #1e293b;
+          line-height: 1.6;
         }
 
         .dsa-constraints {
@@ -1418,428 +1483,512 @@ export default function InterviewScreen() {
           padding: 0 0 0 18px;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap: 5px;
         }
 
         .dsa-constraints li {
           font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
           font-size: 12.5px;
-          color: #334155;
+          color: #3f5148;
         }
 
-        .dsa-leetcode-link {
+        .dsa-link {
           display: inline-flex;
           align-items: center;
-          gap: 5px;
-          font-size: 12px;
-          font-weight: 600;
-          color: #0284c7;
-          text-decoration: none;
-          border: 1px solid #bae6fd;
-          background: #f0f9ff;
-          border-radius: 6px;
-          padding: 5px 10px;
+          gap: 6px;
           width: fit-content;
+          font-size: 12.5px;
+          font-weight: 750;
+          color: var(--emerald-dark);
+          text-decoration: none;
+          border: 1px solid rgba(18,133,95,0.28);
+          background: var(--emerald-soft);
+          border-radius: var(--radius-sm);
+          padding: 8px 13px;
           transition: background 0.15s ease;
         }
 
-        .dsa-leetcode-link:hover {
-          background: #e0f2fe;
+        .dsa-link:hover { background: #d9f2e5; }
+
+        /* ---- ANSWER BLOCK ---- */
+        .answer-block {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
         }
 
-        /* ---------- ANSWER AREA ---------- */
-        .answer-input-wrap {
+        .answer-block-header {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+        }
+
+        .answer-label {
+          margin: 0;
+          font-size: 10.5px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--muted);
+        }
+
+        .answer-count {
+          font-size: 12px;
+          font-weight: 650;
+          color: var(--faint);
+          font-variant-numeric: tabular-nums;
+        }
+
+        .answer-shell {
           position: relative;
-          width: 100%;
+          border-radius: var(--radius);
+          background: var(--panel);
+          border: 1px solid var(--line-strong);
+          box-shadow: var(--shadow);
+          transition: border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+
+        .answer-shell:focus-within {
+          border-color: var(--emerald);
+          box-shadow: 0 0 0 4px rgba(18,133,95,0.13), var(--shadow);
         }
 
         .answer-area {
-          flex: 1;
-          min-height: 140px;
-          background: #f3f4f6;
-          border: 1px solid #e5e7eb;
-          border-radius: 14px;
-          padding: 18px 52px 18px 20px;
-          font-size: 14px;
-          color: #374151;
-          line-height: 1.6;
-          resize: none;
           width: 100%;
+          min-height: 220px;
+          resize: vertical;
+          border: none;
+          background: transparent;
+          border-radius: var(--radius);
+          padding: 20px 60px 20px 20px;
+          font-size: 15px;
+          line-height: 1.75;
+          color: var(--ink);
           font-family: inherit;
         }
 
-        .answer-area:focus {
-          outline: none;
-          border-color: #10b981;
-        }
+        .answer-area:focus { outline: none; }
+        .answer-area::placeholder { color: var(--faint); }
 
         .mic-button {
           position: absolute;
-          right: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 38px;
-          height: 38px;
-          border-radius: 50%;
-          border: 1px solid #d1d5db;
-          background: #ffffff;
-          color: #374151;
-          font-size: 18px;
+          top: 14px;
+          right: 14px;
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          border: 1px solid rgba(18,133,95,0.24);
+          background: var(--emerald-soft);
+          color: var(--emerald-dark);
           display: inline-flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: all 0.2s ease;
-          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+          transition: all 0.18s ease;
         }
 
         .mic-button:hover:not(:disabled) {
-          border-color: #10b981;
-          color: #047857;
+          transform: translateY(-1px);
+          box-shadow: 0 10px 22px rgba(18,133,95,0.18);
         }
 
         .mic-button.listening {
-          background: #fee2e2;
-          border-color: #ef4444;
-          color: #b91c1c;
-          box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+          background: var(--red-soft);
+          border-color: rgba(192,57,43,0.3);
+          color: var(--red);
+          box-shadow: 0 0 0 4px rgba(192,57,43,0.12);
+          animation: pulse-soft 1.2s ease-in-out infinite;
         }
 
-        .mic-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
+        .mic-button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .speech-warning {
+        /* ---- STAGE FOOTER (sticky CTA) ---- */
+        .stage-footer-anchor {
+          position: sticky;
+          bottom: 0;
           margin-top: 8px;
-          font-size: 12px;
-          color: #b45309;
+          padding-top: 18px;
+          background: linear-gradient(180deg, rgba(245,249,246,0), var(--paper) 30%);
         }
 
-        /* ---------- AI FEEDBACK ---------- */
-        .feedback-card {
-          background: #ecfdf5;
-          border: 1px solid #a7f3d0;
-          border-radius: 14px;
-          padding: 16px 18px;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          flex-shrink: 0;
-        }
-
-        .feedback-text {
-          font-size: 13px;
-          color: #047857;
-          margin: 0;
-        }
-
-        .next-question-btn {
-          width: 100%;
-          background: linear-gradient(90deg, #10b981, #0d9488);
-          color: #ffffff;
-          border: none;
-          border-radius: 10px;
-          padding: 14px 0;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: opacity 0.15s ease, transform 0.15s ease;
-        }
-
-        .next-question-btn:hover:not(:disabled) {
-          opacity: 0.92;
-          transform: translateY(-1px);
-        }
-
-        .next-question-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        /* ---------- RESPONSIVE ---------- */
-        @media (max-width: 900px) {
-          .ai-interview-screen {
-            flex-direction: column;
-            height: auto;
-            min-height: 100vh;
-            overflow: visible;
-          }
-
-          .interview-left {
-            width: 100vw;
-            height: 40vh;
-            position: relative;
-          }
-
-          .interview-right {
-            width: 100vw;
-            height: auto;
-          }
-
-          .right-top-row {
-            flex-direction: column;
-          }
-
-          .status-card {
-            width: 100%;
-          }
-        }
-
-        /* ---------- START SCREEN OVERLAY ---------- */
-        .start-screen {
-          position: absolute;
-          inset: 0;
-          background: rgba(247, 248, 249, 0.97);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 24px;
-          padding: 32px;
-          z-index: 100;
-          text-align: center;
-        }
-
-        .start-screen-title {
-          font-size: 24px;
-          font-weight: 700;
-          color: #111827;
-          margin: 0;
-        }
-
-        .start-screen-subtitle {
-          font-size: 14px;
-          color: #6b7280;
-          margin: 0;
-          max-width: 360px;
-          line-height: 1.6;
-        }
-
-        .start-screen-rules {
-          background: #f0fdf4;
-          border: 1px solid #bbf7d0;
-          border-radius: 12px;
-          padding: 16px 20px;
-          text-align: left;
-          width: 100%;
-          max-width: 380px;
-        }
-
-        .start-screen-rules-title {
-          font-size: 12px;
-          font-weight: 700;
-          color: #059669;
-          margin: 0 0 10px 0;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-
-        .start-screen-rules ul {
-          margin: 0;
-          padding: 0 0 0 18px;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .start-screen-rules li {
-          font-size: 13px;
-          color: #374151;
-          line-height: 1.5;
-        }
-
-        .start-interview-btn {
-          background: linear-gradient(90deg, #10b981, #0d9488);
-          color: #ffffff;
-          border: none;
-          border-radius: 12px;
-          padding: 16px 40px;
-          font-size: 16px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: opacity 0.15s ease, transform 0.15s ease;
-          box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
-        }
-
-        .start-interview-btn:hover:not(:disabled) {
-          opacity: 0.92;
-          transform: translateY(-1px);
-        }
-
-        .start-interview-btn:disabled {
-          opacity: 0.55;
-          cursor: not-allowed;
-        }
-
-        .start-screen-error {
-          background: #fef2f2;
-          border: 1px solid #fca5a5;
-          border-radius: 10px;
-          padding: 12px 16px;
-          font-size: 13px;
-          color: #b91c1c;
-          max-width: 380px;
-          width: 100%;
-          line-height: 1.5;
-        }
-
-        /* ---------- CHEATING TERMINATION SCREEN ---------- */
-        .termination-screen {
-          position: fixed;
-          inset: 0;
-          background: #0f172a;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 20px;
-          padding: 32px;
-          z-index: 9999;
-          text-align: center;
-        }
-
-        .termination-icon {
-          font-size: 56px;
-          line-height: 1;
-        }
-
-        .termination-title {
-          font-size: 32px;
-          font-weight: 800;
-          color: #f1f5f9;
-          margin: 0;
-          letter-spacing: -0.5px;
-        }
-
-        .termination-subtitle {
-          font-size: 16px;
-          font-weight: 600;
-          color: #ef4444;
-          margin: 0;
-        }
-
-        .termination-reason {
-          font-size: 14px;
-          color: #94a3b8;
-          max-width: 420px;
-          line-height: 1.65;
-          background: rgba(239, 68, 68, 0.08);
-          border: 1px solid rgba(239, 68, 68, 0.2);
-          border-radius: 10px;
-          padding: 14px 20px;
-          margin: 0;
-        }
-
-        .termination-redirect {
-          font-size: 13px;
-          color: #475569;
-          margin: 0;
-        }
-
-        .termination-home-btn {
-          margin-top: 4px;
-          background: #ef4444;
-          color: #ffffff;
-          border: none;
-          border-radius: 10px;
-          padding: 14px 36px;
-          font-size: 15px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: opacity 0.15s ease, transform 0.15s ease;
-          box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
-        }
-
-        .termination-home-btn:hover {
-          opacity: 0.9;
-          transform: translateY(-1px);
-        }
-
-        /* ---------- ANTI-CHEAT STATUS BAR ---------- */        .anti-cheat-bar {
-          background: #f0fdf4;
-          border: 1px solid #bbf7d0;
-          border-radius: 12px;
-          padding: 10px 16px;
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 6px 16px;
-          font-size: 12px;
-          color: #374151;
-          flex-shrink: 0;
-        }
-
-        .anti-cheat-bar-title {
-          font-weight: 700;
-          color: #059669;
-          white-space: nowrap;
-          display: flex;
-          align-items: center;
-          gap: 5px;
-        }
-
-        .anti-cheat-stat {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          color: #374151;
-        }
-
-        .anti-cheat-stat.nonzero {
-          color: #b45309;
-          font-weight: 600;
-        }
-
-        /* ---------- FULLSCREEN BANNER ---------- */
-        .fullscreen-banner {
-          background: #fffbeb;
-          border: 1px solid #fcd34d;
-          border-radius: 10px;
-          padding: 10px 16px;
+        .stage-footer {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
+          gap: 16px;
+          padding: 14px 18px;
+          border-radius: var(--radius);
+          background: var(--panel);
+          border: 1px solid var(--line);
+          box-shadow: var(--shadow-lg);
+        }
+
+        .stage-feedback {
+          margin: 0;
           font-size: 13px;
-          color: #92400e;
-          flex-shrink: 0;
+          font-weight: 600;
+          color: var(--muted);
+          line-height: 1.5;
         }
 
-        .fullscreen-banner-msg {
-          flex: 1;
-        }
-
-        .return-fullscreen-btn {
+        .continue-btn {
           flex-shrink: 0;
-          background: #f59e0b;
-          color: #ffffff;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
           border: none;
-          border-radius: 8px;
-          padding: 7px 14px;
-          font-size: 12px;
-          font-weight: 700;
+          border-radius: var(--radius-sm);
+          padding: 13px 22px;
+          background: linear-gradient(135deg, var(--moss), var(--emerald));
+          color: #ffffff;
+          font-size: 14px;
+          font-weight: 800;
           cursor: pointer;
-          transition: opacity 0.15s ease;
+          box-shadow: 0 16px 34px rgba(15,61,46,0.24);
+          transition: opacity 0.15s ease, transform 0.15s ease;
         }
 
-        .return-fullscreen-btn:hover {
-          opacity: 0.88;
+        .continue-btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
+        .continue-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ---- SIDE (interviewer sidebar) ---- */
+        .studio-side {
+          border-left: 1px solid var(--line);
+          background: var(--panel);
+          padding: 22px 18px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
         }
 
-        /* ---------- WARNING SNACKBAR ---------- */
+        .interviewer-card {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .interviewer-frame {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 4 / 5;
+          border-radius: var(--radius);
+          overflow: hidden;
+          background: #0c1a15;
+          border: 1px solid var(--line-strong);
+          box-shadow: var(--shadow);
+        }
+
+        .interviewer-video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+
+        .interviewer-frame.speaking {
+          box-shadow: 0 0 0 3px rgba(18,133,95,0.35), var(--shadow);
+        }
+
+        .interviewer-frame.listening {
+          box-shadow: 0 0 0 3px rgba(192,57,43,0.3), var(--shadow);
+        }
+
+        .interviewer-indicator {
+          position: absolute;
+          top: 12px;
+          left: 12px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 5px 10px;
+          border-radius: 999px;
+          background: rgba(8, 20, 16, 0.55);
+          backdrop-filter: blur(6px);
+          font-size: 10.5px;
+          font-weight: 750;
+          color: #eafff3;
+        }
+
+        .interviewer-indicator::before {
+          content: "";
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: #8fa39a;
+        }
+
+        .interviewer-indicator.speaking::before { background: #34d399; animation: pulse-soft 1.1s ease-in-out infinite; }
+        .interviewer-indicator.listening::before { background: #f87171; animation: pulse-soft 1.1s ease-in-out infinite; }
+
+        .interviewer-meta { text-align: center; }
+
+        .interviewer-name {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 800;
+          color: var(--ink);
+        }
+
+        .interviewer-state {
+          margin: 2px 0 0;
+          font-size: 12px;
+          font-weight: 650;
+          color: var(--faint);
+        }
+
+        .gender-switcher {
+          display: flex;
+          background: var(--paper);
+          border: 1px solid var(--line-strong);
+          border-radius: 999px;
+          padding: 3px;
+          gap: 3px;
+        }
+
+        .gender-btn {
+          flex: 1;
+          border: none;
+          border-radius: 999px;
+          padding: 8px 10px;
+          font-size: 12px;
+          font-weight: 750;
+          cursor: pointer;
+          transition: background 0.16s ease, color 0.16s ease;
+          background: transparent;
+          color: var(--muted);
+        }
+
+        .gender-btn.active {
+          background: var(--moss);
+          color: #eafff3;
+        }
+
+        .gender-btn:not(.active):hover { color: var(--ink); }
+
+        .side-divider {
+          height: 1px;
+          background: var(--line);
+          border: none;
+          margin: 0;
+        }
+
+        .security-card {
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--line);
+          background: var(--paper);
+          padding: 14px;
+        }
+
+        .security-card-title {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin: 0 0 10px;
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--emerald-dark);
+        }
+
+        .security-card ul {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+
+        .security-card li {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          font-size: 12.5px;
+          font-weight: 650;
+          color: var(--muted);
+        }
+
+        .security-card li strong {
+          font-variant-numeric: tabular-nums;
+          color: var(--ink);
+        }
+
+        .security-card li.flagged strong { color: var(--amber); }
+
+        /* ================= LOBBY ================= */
+        .studio-lobby {
+          position: absolute;
+          inset: 0;
+          background: rgba(245, 249, 246, 0.97);
+          backdrop-filter: blur(6px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 32px;
+          z-index: 50;
+          overflow-y: auto;
+        }
+
+        .lobby-card {
+          width: 100%;
+          max-width: 460px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 18px;
+          text-align: center;
+          background: var(--panel);
+          border: 1px solid var(--line);
+          border-radius: 18px;
+          padding: 36px 32px;
+          box-shadow: var(--shadow-lg);
+        }
+
+        .lobby-mark {
+          width: 54px;
+          height: 54px;
+          border-radius: 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #eafff3;
+          background: linear-gradient(150deg, var(--moss), var(--emerald));
+          box-shadow: 0 16px 34px rgba(15,61,46,0.26);
+        }
+
+        .lobby-title {
+          margin: 0;
+          font-family: 'Source Serif 4', Georgia, serif;
+          font-size: clamp(24px, 3.4vw, 30px);
+          font-weight: 650;
+          color: var(--ink);
+        }
+
+        .lobby-sub {
+          margin: 0;
+          font-size: 13.5px;
+          color: var(--muted);
+          font-weight: 600;
+          line-height: 1.6;
+        }
+
+        .lobby-grid {
+          width: 100%;
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 10px;
+        }
+
+        .lobby-stat {
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--line);
+          background: var(--paper);
+          padding: 12px;
+          text-align: left;
+        }
+
+        .lobby-stat span {
+          display: block;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--faint);
+          margin-bottom: 3px;
+        }
+
+        .lobby-stat strong {
+          font-size: 13.5px;
+          font-weight: 750;
+          color: var(--ink);
+        }
+
+        .lobby-checklist {
+          width: 100%;
+          text-align: left;
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--line);
+          background: var(--mint);
+          padding: 16px 18px;
+        }
+
+        .lobby-checklist-title {
+          margin: 0 0 10px;
+          font-size: 10.5px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.07em;
+          color: var(--emerald-dark);
+        }
+
+        .lobby-checklist ul {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: flex;
+          flex-direction: column;
+          gap: 9px;
+        }
+
+        .lobby-checklist li {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 12.5px;
+          font-weight: 650;
+          color: #33443c;
+        }
+
+        .lobby-checklist li svg { color: var(--emerald-dark); flex-shrink: 0; }
+
+        .lobby-error {
+          width: 100%;
+          border-radius: var(--radius-sm);
+          background: var(--red-soft);
+          border: 1px solid rgba(192,57,43,0.28);
+          color: var(--red);
+          font-size: 12.5px;
+          font-weight: 650;
+          padding: 12px 14px;
+          line-height: 1.5;
+        }
+
+        .lobby-start-btn {
+          width: 100%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          border: none;
+          border-radius: var(--radius-sm);
+          padding: 15px 0;
+          background: linear-gradient(135deg, var(--moss), var(--emerald));
+          color: #ffffff;
+          font-size: 15px;
+          font-weight: 800;
+          cursor: pointer;
+          box-shadow: 0 18px 40px rgba(15,61,46,0.28);
+          transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .lobby-start-btn:hover:not(:disabled) { opacity: 0.94; transform: translateY(-1px); }
+        .lobby-start-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+        .lobby-start-btn .spin { animation: room-spin 0.9s linear infinite; }
+
+        /* ================= WARNING SNACKBAR ================= */
         .anti-cheat-warning {
           position: fixed;
           bottom: 28px;
           left: 50%;
           transform: translateX(-50%);
-          background: #1f2937;
-          color: #f9fafb;
-          border-radius: 10px;
+          background: #0e1f1a;
+          color: #eafff3;
+          border-radius: var(--radius-sm);
           padding: 13px 22px;
           font-size: 13px;
-          font-weight: 500;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
+          font-weight: 600;
+          box-shadow: 0 22px 54px rgba(15,23,42,0.28);
           z-index: 9999;
           max-width: 480px;
           text-align: center;
@@ -1847,1029 +1996,431 @@ export default function InterviewScreen() {
           animation: snackbar-in 0.2s ease;
         }
 
-        /* ---------- PREMIUM INTERVIEW ROOM OVERRIDES ---------- */
-        :root {
-          --room-ink: #111827;
-          --room-muted: #667085;
-          --room-soft: #f4f7fb;
-          --room-panel: #ffffff;
-          --room-line: #dfe7ef;
-          --room-line-strong: #cbd5e1;
-          --room-green: #10b981;
-          --room-green-dark: #047857;
-          --room-teal: #073b3a;
-          --room-amber: #f59e0b;
-          --room-red: #ef4444;
-          --room-shadow: 0 22px 60px rgba(15, 23, 42, 0.10);
-          --room-radius: 8px;
-        }
-
-        html, body, #root {
-          width: 100%;
-          min-height: 100%;
-          background: #0b1220;
-        }
-
-        .ai-interview-screen {
-          background:
-            linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px),
-            linear-gradient(180deg, rgba(255,255,255,0.035) 1px, transparent 1px),
-            #0b1220;
-          background-size: 42px 42px;
-          color: var(--room-ink);
-          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          gap: 0;
-        }
-
-        .interview-left {
-          width: 42vw;
-          min-width: 420px;
-          background:
-            radial-gradient(circle at 50% 22%, rgba(16,185,129,0.25), transparent 28rem),
-            linear-gradient(180deg, #111827, #020617);
-          overflow: hidden;
-          border-right: 1px solid rgba(255,255,255,0.12);
-        }
-
-        .interview-left::before,
-        .interview-left::after {
-          content: "";
-          position: absolute;
-          inset: auto 24px 24px;
-          height: 34%;
-          pointer-events: none;
-          border-radius: 18px;
-          background: linear-gradient(180deg, transparent, rgba(2,6,23,0.82));
-          z-index: 2;
-        }
-
-        .interview-left::after {
-          inset: 20px;
-          height: auto;
-          border: 1px solid rgba(255,255,255,0.12);
-          background: transparent;
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
-        }
-
-        .interviewer-video {
-          filter: saturate(1.02) contrast(1.02);
-          transform: scale(1.01);
-        }
-
-        .gender-switcher {
-          bottom: 28px;
-          z-index: 5;
-          border-radius: var(--room-radius);
-          padding: 5px;
-          background: rgba(15,23,42,0.68);
-          border: 1px solid rgba(255,255,255,0.18);
-          box-shadow: 0 18px 42px rgba(0,0,0,0.32);
-        }
-
-        .gender-btn {
-          border-radius: 6px;
-          padding: 9px 16px;
-          font-size: 12px;
-          font-weight: 800;
-          color: rgba(255,255,255,0.74);
-        }
-
-        .gender-btn.active {
-          color: #082f2f;
-          background: #ffffff;
-        }
-
-        .interview-right {
-          width: 58vw;
-          padding: 24px;
-          gap: 14px;
-          background:
-            radial-gradient(circle at 92% -10%, rgba(16,185,129,0.16), transparent 24rem),
-            radial-gradient(circle at 0% 100%, rgba(245,158,11,0.12), transparent 24rem),
-            var(--room-soft);
-        }
-
-        .interview-right::-webkit-scrollbar { width: 10px; }
-        .interview-right::-webkit-scrollbar-track { background: transparent; }
-        .interview-right::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; border: 3px solid var(--room-soft); }
-
-        .right-top-row {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 210px;
-          align-items: stretch;
-          gap: 14px;
-        }
-
-        .interview-info,
-        .status-card,
-        .question-card,
-        .answer-area,
-        .feedback-card,
-        .anti-cheat-bar,
-        .fullscreen-banner {
-          border-radius: var(--room-radius);
-          border: 1px solid var(--room-line);
-          box-shadow: var(--room-shadow);
-        }
-
-        .interview-info {
-          min-height: 138px;
-          padding: 20px;
-          display: flex;
-          align-items: center;
-          background:
-            linear-gradient(135deg, rgba(255,255,255,0.98), rgba(236,253,245,0.82)),
-            var(--room-panel);
-          border-color: rgba(16,185,129,0.18);
-        }
-
-        .interview-info.loading,
-        .interview-info.error {
-          min-height: 138px;
-          font-weight: 750;
-        }
-
-        .interview-info.loading div {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .interview-info.loading div::before {
-          content: "";
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          border: 2px solid #d1fae5;
-          border-top-color: var(--room-green-dark);
-          animation: room-spin 0.8s linear infinite;
-        }
-
-        .interview-info.error {
-          background: #fffbeb;
-          border-color: #fbbf24;
-          color: #92400e;
-        }
-
-        .interview-role {
-          color: var(--room-ink);
-          font-size: clamp(24px, 3vw, 36px);
-          font-weight: 850;
-          letter-spacing: 0;
-        }
-
-        .interview-meta,
-        .interview-difficulty {
-          color: var(--room-muted);
-          font-size: 13px;
-          font-weight: 700;
-        }
-
-        .interview-meta {
-          margin-top: 10px;
-          gap: 8px;
-        }
-
-        .interview-meta span {
-          padding: 6px 10px;
-          border-radius: 999px;
-          background: rgba(255,255,255,0.78);
-          border: 1px solid rgba(203,213,225,0.75);
-        }
-
-        .interview-difficulty {
-          margin-top: 10px;
-        }
-
-        .interview-difficulty strong,
-        .interview-topics-label {
-          color: var(--room-green-dark);
-          font-weight: 850;
-        }
-
-        .interview-topic-chip {
-          border-radius: 999px;
-          background: #ecfdf5;
-          border-color: rgba(16,185,129,0.25);
-          color: var(--room-green-dark);
-          padding: 6px 10px;
-          font-size: 12px;
-          font-weight: 800;
-        }
-
-        .status-card {
-          width: auto;
-          padding: 18px;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          background: #111827;
-          color: #f8fafc;
-          border-color: rgba(255,255,255,0.08);
-          box-shadow: 0 24px 64px rgba(15,23,42,0.24);
-        }
-
-        .status-heading {
-          color: #9ca3af;
-          text-align: left;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          font-size: 11px;
-          font-weight: 850;
-        }
-
-        .status-timer-row {
-          justify-content: flex-start;
-          gap: 12px;
-          margin: 10px 0;
-        }
-
-        .timer-ring {
-          width: 58px;
-          height: 58px;
-          box-shadow: 0 0 0 8px rgba(255,255,255,0.05);
-        }
-
-        .timer-ring-inner {
-          width: 44px;
-          height: 44px;
-          background: #111827;
-        }
-
-        .timer-text {
-          color: #ffffff;
-          font-size: 24px;
-          font-weight: 850;
-        }
-
-        .status-question-count {
-          text-align: left;
-          color: #cbd5e1;
-          margin: 0;
-          font-size: 13px;
-        }
-
-        .status-question-count span {
-          color: #86efac;
-        }
-
-        .anti-cheat-bar {
-          background: #ffffff;
-          padding: 12px 14px;
-          gap: 8px;
-          border-color: rgba(16,185,129,0.18);
-        }
-
-        .anti-cheat-bar-title {
-          color: var(--room-green-dark);
-          margin-right: 6px;
-        }
-
-        .anti-cheat-stat {
-          padding: 7px 10px;
-          border-radius: 999px;
-          background: var(--room-soft);
-          color: var(--room-muted);
-          font-weight: 750;
-        }
-
-        .anti-cheat-stat.nonzero {
-          color: #92400e;
-          background: #fffbeb;
-        }
-
-        .fullscreen-banner {
-          padding: 12px 14px;
-          background: #fffbeb;
-          border-color: #fcd34d;
-        }
-
-        .fullscreen-banner-msg {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          font-weight: 700;
-        }
-
-        .return-fullscreen-btn,
-        .read-question-btn,
-        .next-question-btn,
-        .start-interview-btn,
-        .termination-home-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        }
-
-        .return-fullscreen-btn {
-          border-radius: 7px;
-          padding: 9px 12px;
-          font-weight: 800;
-        }
-
-        .question-card {
-          padding: 22px;
-          background: #ffffff;
-          border-color: var(--room-line);
-        }
-
-        .question-header-row {
-          gap: 18px;
-        }
-
-        .question-of {
-          display: inline-flex;
-          align-items: center;
-          width: fit-content;
-          padding: 7px 10px;
-          border-radius: 999px;
-          margin-bottom: 14px;
-          background: #ecfdf5;
-          color: var(--room-green-dark);
-          border: 1px solid rgba(16,185,129,0.22);
-          font-size: 12px;
-          font-weight: 850;
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
-        }
-
-        .question-text {
-          color: var(--room-ink);
-          font-size: clamp(20px, 2.2vw, 29px);
-          line-height: 1.35;
-          font-weight: 850;
-          letter-spacing: 0;
-        }
-
-        .read-question-btn {
-          border-radius: var(--room-radius);
-          padding: 11px 14px;
-          background: #111827;
-          border-color: #111827;
-          color: #ffffff;
-          font-size: 13px;
-          box-shadow: 0 12px 28px rgba(15,23,42,0.16);
-        }
-
-        .read-question-btn:hover:not(:disabled),
-        .read-question-btn.speaking {
-          background: var(--room-teal);
-          border-color: var(--room-teal);
-          color: #ffffff;
-        }
-
-        .dsa-problem {
-          margin-top: 18px;
-          padding-top: 18px;
-          border-top: 1px solid var(--room-line);
-        }
-
-        .dsa-section-label {
-          color: var(--room-green-dark);
-          font-weight: 850;
-        }
-
-        .dsa-description {
-          color: #344054;
-        }
-
-        .dsa-example-block {
-          border-radius: var(--room-radius);
-          background: #0f172a;
-          border-color: #1e293b;
-          color: #e5e7eb;
-        }
-
-        .dsa-leetcode-link {
-          border-radius: var(--room-radius);
-          color: #075985;
-          font-weight: 800;
-        }
-
-        .answer-input-wrap {
-          flex: 1;
-          min-height: 220px;
-          display: flex;
-        }
-
-        .answer-area {
-          flex: 1;
-          min-height: 220px;
-          resize: vertical;
-          background: #ffffff;
-          border-color: var(--room-line);
-          color: var(--room-ink);
-          padding: 20px 68px 20px 20px;
-          font-size: 15px;
-          line-height: 1.7;
-          box-shadow: var(--room-shadow);
-        }
-
-        .answer-area::placeholder {
-          color: #98a2b3;
-        }
-
-        .answer-area:focus {
-          border-color: var(--room-green);
-          box-shadow: 0 0 0 4px rgba(16,185,129,0.13), var(--room-shadow);
-        }
-
-        .mic-button {
-          top: 20px;
-          right: 20px;
-          transform: none;
-          width: 46px;
-          height: 46px;
-          border-radius: var(--room-radius);
-          border-color: rgba(16,185,129,0.24);
-          background: #ecfdf5;
-          color: var(--room-green-dark);
-        }
-
-        .mic-button:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 14px 30px rgba(16,185,129,0.16);
-        }
-
-        .mic-button.listening {
-          background: #fef2f2;
-          border-color: #fecaca;
-          color: #dc2626;
-          box-shadow: 0 0 0 4px rgba(239,68,68,0.12);
-        }
-
-        .speech-warning {
-          margin: -6px 0 0;
-          padding: 10px 12px;
-          width: fit-content;
-          border-radius: var(--room-radius);
-          background: #fffbeb;
-          border: 1px solid #fde68a;
-          color: #92400e;
-          font-weight: 700;
-        }
-
-        .feedback-card {
-          position: sticky;
-          bottom: 0;
-          z-index: 4;
-          padding: 14px;
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 210px;
-          align-items: center;
-          gap: 14px;
-          background: rgba(255,255,255,0.92);
-          backdrop-filter: blur(18px);
-          border-color: rgba(16,185,129,0.22);
-        }
-
-        .feedback-text {
-          color: var(--room-muted);
-          font-size: 13px;
-          line-height: 1.6;
-          font-weight: 650;
-        }
-
-        .next-question-btn {
-          width: auto;
-          min-height: 48px;
-          border-radius: var(--room-radius);
-          padding: 0 18px;
-          background: linear-gradient(135deg, var(--room-teal), var(--room-green-dark) 55%, var(--room-green));
-          font-weight: 850;
-          box-shadow: 0 18px 36px rgba(4,120,87,0.24);
-        }
-
-        .start-screen {
-          position: fixed;
-          inset: 0 0 0 42vw;
-          background:
-            radial-gradient(circle at 50% 8%, rgba(16,185,129,0.18), transparent 28rem),
-            rgba(244,247,251,0.96);
-          backdrop-filter: blur(18px);
-          gap: 18px;
-          padding: 36px;
-        }
-
-        .start-screen::before {
-          content: "";
-          width: 58px;
-          height: 58px;
-          border-radius: 16px;
-          background:
-            linear-gradient(135deg, var(--room-teal), var(--room-green));
-          box-shadow: 0 18px 44px rgba(4,120,87,0.25);
-        }
-
-        .start-screen-title {
-          font-size: clamp(32px, 4.5vw, 46px);
-          line-height: 1.04;
-          font-weight: 850;
-          letter-spacing: 0;
-        }
-
-        .start-screen-subtitle {
-          color: var(--room-muted);
-          font-size: 15px;
-          font-weight: 700;
-          max-width: 460px;
-        }
-
-        .start-screen-rules {
-          max-width: 480px;
-          padding: 18px;
-          border-radius: var(--room-radius);
-          background: #ffffff;
-          border-color: var(--room-line);
-          box-shadow: var(--room-shadow);
-        }
-
-        .start-screen-rules-title {
-          color: var(--room-green-dark);
-          font-weight: 850;
-          margin-bottom: 14px;
-        }
-
-        .start-screen-rules ul {
-          padding: 0;
-          gap: 10px;
-          list-style: none;
-        }
-
-        .start-screen-rules li {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          color: #344054;
-          font-weight: 700;
-        }
-
-        .start-screen-rules li svg {
-          color: var(--room-green-dark);
-          flex: 0 0 auto;
-        }
-
-        .start-interview-btn {
-          min-height: 54px;
-          border-radius: var(--room-radius);
-          padding: 0 28px;
-          background: linear-gradient(135deg, var(--room-teal), var(--room-green-dark) 55%, var(--room-green));
-          font-weight: 850;
-          box-shadow: 0 18px 38px rgba(4,120,87,0.28);
-        }
-
-        .start-interview-btn svg {
-          animation: none;
-        }
-
-        .start-interview-btn:disabled svg {
-          animation: room-spin 0.9s linear infinite;
-        }
-
-        .start-screen-error {
-          border-radius: var(--room-radius);
-          font-weight: 700;
-        }
-
-        .anti-cheat-warning {
-          bottom: 24px;
-          border-radius: var(--room-radius);
-          background: #111827;
-          border: 1px solid rgba(255,255,255,0.08);
-          box-shadow: 0 22px 54px rgba(15,23,42,0.26);
+        @keyframes pulse-soft {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.45; transform: scale(0.82); }
         }
 
         @keyframes room-spin {
           to { transform: rotate(360deg); }
         }
 
-        @media (max-width: 1180px) {
-          .interview-left {
-            width: 38vw;
-            min-width: 360px;
-          }
-
-          .interview-right {
-            width: 62vw;
-          }
-
-          .right-top-row,
-          .feedback-card {
-            grid-template-columns: 1fr;
-          }
-
-          .status-card {
-            min-height: 112px;
-          }
-
-          .start-screen {
-            inset: 0 0 0 38vw;
-          }
-        }
-
-        @media (max-width: 900px) {
-          .ai-interview-screen {
-            background: var(--room-soft);
-          }
-
-          .interview-left {
-            width: 100vw;
-            min-width: 0;
-            height: 42vh;
-          }
-
-          .interview-right {
-            width: 100vw;
-            min-height: 58vh;
-            padding: 16px;
-          }
-
-          .start-screen {
-            inset: 0;
-          }
-
-          .status-card {
-            width: 100%;
-          }
-
-          .question-header-row {
-            flex-direction: column;
-          }
-
-          .read-question-btn {
-            width: 100%;
-          }
-
-          .feedback-card {
-            position: relative;
-          }
-
-          .next-question-btn {
-            width: 100%;
-          }
-        }
-
-        @media (max-width: 560px) {
-          .interview-left {
-            height: 34vh;
-          }
-
-          .interview-right {
-            padding: 12px;
-            gap: 12px;
-          }
-
-          .interview-info,
-          .status-card,
-          .question-card,
-          .feedback-card,
-          .start-screen-rules {
-            padding: 16px;
-          }
-
-          .interview-role {
-            font-size: 24px;
-          }
-
-          .question-text {
-            font-size: 20px;
-          }
-
-          .answer-input-wrap,
-          .answer-area {
-            min-height: 260px;
-          }
-
-          .anti-cheat-bar,
-          .fullscreen-banner {
-            align-items: flex-start;
-            flex-direction: column;
-          }
-
-          .return-fullscreen-btn,
-          .start-interview-btn {
-            width: 100%;
-          }
-        }
-
         @keyframes snackbar-in {
           from { opacity: 0; transform: translateX(-50%) translateY(10px); }
           to   { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
+
+        /* ================= RESPONSIVE ================= */
+        @media (max-width: 1180px) {
+          .studio-main { grid-template-columns: minmax(0, 1fr) 260px; }
+          .studio-brand-role { max-width: 30vw; }
+        }
+
+        @media (max-width: 940px) {
+          .studio-main {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+            overflow-y: auto;
+          }
+
+          .studio-side {
+            border-left: none;
+            border-bottom: 1px solid var(--line);
+            flex-direction: row;
+            align-items: center;
+            padding: 14px 20px;
+            gap: 14px;
+            overflow-x: auto;
+          }
+
+          .interviewer-card {
+            flex-direction: row;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+          }
+
+          .interviewer-frame { width: 64px; height: 80px; aspect-ratio: auto; flex-shrink: 0; }
+          .interviewer-meta { text-align: left; }
+          .gender-switcher { width: 160px; }
+          .side-divider { display: none; }
+          .security-card { flex-shrink: 0; min-width: 220px; }
+
+          .studio-progress-count { display: none; }
+        }
+
+        @media (max-width: 640px) {
+          .studio-header { padding: 12px 16px; flex-wrap: wrap; row-gap: 8px; }
+          .studio-brand-role { max-width: 48vw; }
+          .studio-progress { order: 3; width: 100%; justify-content: center; }
+          .studio-meta-strip, .fullscreen-banner { padding: 10px 16px; }
+          .studio-stage { padding: 24px 16px 110px; }
+          .stage-footer { flex-direction: column; align-items: stretch; text-align: center; }
+          .continue-btn { justify-content: center; }
+          .lobby-grid { grid-template-columns: 1fr; }
+          .studio-side { padding: 12px 16px; }
+        }
       `}</style>
 
-      {/* LEFT: full-bleed interviewer video, no card, no padding */}
-      <div className="interview-left">
-        <video
-          ref={videoRef}
-          src={interviewerVideo}
-          muted
-          loop
-          playsInline
-          preload="auto"
-          className="interviewer-video"
-        />
-        {/* Interviewer gender switcher — overlaid at the bottom of the video panel */}
-        <div className="gender-switcher" role="group" aria-label="Select interviewer">
-          <button
-            type="button"
-            className={`gender-btn ${interviewerGender === "male" ? "active" : ""}`}
-            onClick={() => handleGenderSwitch("male")}
-            aria-pressed={interviewerGender === "male"}
-          >
-            👨 Male
-          </button>
-          <button
-            type="button"
-            className={`gender-btn ${interviewerGender === "female" ? "active" : ""}`}
-            onClick={() => handleGenderSwitch("female")}
-            aria-pressed={interviewerGender === "female"}
-          >
-            👩 Female
-          </button>
+      {/* ================= HEADER ================= */}
+      <header className="studio-header">
+        <div className="studio-brand">
+          <span className="studio-brand-mark" aria-hidden="true">
+            <ShieldCheck size={18} />
+          </span>
+          <div>
+            <p className="studio-brand-name">AI INTERVIEW</p>
+            <p className="studio-brand-role">{interview?.role || (loadingInterview ? "Preparing…" : "Interview")}</p>
+          </div>
         </div>
-      </div>
 
-      {/* RIGHT: independent workspace */}
-      <div className="interview-right">
-
-        {/* ── START SCREEN OVERLAY — shown until the user clicks Start Interview ── */}
-        {!interviewStarted && (
-          <div className="start-screen">
-            <p className="start-screen-title">Ready for your interview?</p>
-            <p className="start-screen-subtitle">
-              {loadingInterview
-                ? "Loading your interview..."
-                : interview
-                ? `${interview.role} · ${interview.difficulty} · ${interview.numberOfQuestions} questions`
-                : ""}
-            </p>
-
-            <div className="start-screen-rules">
-              <p className="start-screen-rules-title">Interview Rules</p>
-              <ul>
-                <li><Maximize2 size={16} aria-hidden="true" /> Fullscreen mode is required throughout</li>
-                <li><Eye size={16} aria-hidden="true" /> Tab switching is monitored</li>
-                <li><ClipboardX size={16} aria-hidden="true" /> Copy / Paste / Cut are restricted</li>
-                <li><Monitor size={16} aria-hidden="true" /> Right-click is disabled</li>
-              </ul>
+        {totalQuestions > 0 && (
+          <div className="studio-progress" aria-label="Interview progress">
+            <span className="studio-progress-count">
+              {pad2(currentIndex + 1)}<em>/ {pad2(totalQuestions)}</em>
+            </span>
+            <div className="studio-progress-track">
+              {interviewQuestions.map((q, i) => (
+                <span
+                  key={q.id}
+                  className={`studio-progress-dot ${i < currentIndex ? "done" : ""} ${i === currentIndex ? "active" : ""}`}
+                />
+              ))}
             </div>
-
-            {fullscreenError && (
-              <div className="start-screen-error">{fullscreenError}</div>
-            )}
-
-            <button
-              type="button"
-              className="start-interview-btn"
-              onClick={handleStartInterview}
-              disabled={loadingInterview || startingInterview || Boolean(interviewError)}
-            >
-              {startingInterview ? (
-                <>
-                  <LoaderCircle size={18} aria-hidden="true" />
-                  Starting...
-                </>
-              ) : (
-                <>
-                  <ShieldCheck size={18} aria-hidden="true" />
-                  Start Interview
-                </>
-              )}
-            </button>
           </div>
         )}
 
-        <div className="right-top-row">
-          <div
-            className={`interview-info ${loadingInterview ? "loading" : ""} ${interviewError ? "error" : ""}`}
-          >
-            {loadingInterview ? (
-              <div>Loading interview...</div>
-            ) : interviewError ? (
-              <div>{interviewError}</div>
-            ) : (
-              <div>
-                <h1 className="interview-role">{interview?.role || "Interview"}</h1>
+        <div className="studio-header-right">
+          <div className={`studio-timer ${urgency !== "normal" ? urgency : ""}`}>
+            <span className="studio-timer-bar" style={{ "--p": progressRatio }} />
+            {formatTime(secondsLeft)}
+          </div>
+          <div className={`studio-security ${violationTotal > 0 ? "flagged" : ""}`}>
+            <Lock size={12} aria-hidden="true" />
+            {!interviewStarted ? "Standby" : violationTotal > 0 ? `${violationTotal} flagged` : "Secure"}
+          </div>
+        </div>
+      </header>
 
-                <div className="interview-meta">
-                  {interview?.experience && <span>{interview.experience} Experience</span>}
-                  {interview?.interviewType && <span>• {interview.interviewType}</span>}
-                  {typeof interview?.numberOfQuestions === "number" && (
-                    <span>• {interview.numberOfQuestions} questions</span>
+      {/* ================= META STRIP ================= */}
+      {loadingInterview ? (
+        <div className="studio-meta-strip loading">Preparing your interview workspace…</div>
+      ) : interviewError ? (
+        <div className="studio-meta-strip error">{interviewError}</div>
+      ) : interview ? (
+        <div className="studio-meta-strip">
+          {interview.experience && <span className="meta-chip">{interview.experience} experience</span>}
+          {interview.interviewType && <span className="meta-chip">{interview.interviewType}</span>}
+          {interview.difficulty && <span className="meta-chip accent">{interview.difficulty}</span>}
+          {interviewTopics.map((topic) => (
+            <span key={topic} className="meta-chip">{topic}</span>
+          ))}
+        </div>
+      ) : null}
+
+      {/* ================= FULLSCREEN BANNER ================= */}
+      {interviewStarted && !isFullscreen && !fullscreenUnavailable && (
+        <div className="fullscreen-banner" role="alert">
+          <span className="fullscreen-banner-msg">
+            <AlertTriangle size={15} aria-hidden="true" />
+            Please return to fullscreen mode to continue the interview.
+          </span>
+          <button type="button" className="return-fullscreen-btn" onClick={() => requestFullscreen()}>
+            <Maximize2 size={13} aria-hidden="true" />
+            Return to Fullscreen
+          </button>
+        </div>
+      )}
+
+      {/* ================= MAIN ================= */}
+      <div className="studio-main">
+        <main className="studio-stage">
+          <div className="stage-inner">
+            <section>
+              <div className="question-top">
+                <span className="question-index">
+                  Question {pad2(currentIndex + 1)} of {pad2(totalQuestions || 0)}
+                </span>
+                <div className="question-top-right">
+                  {aiStateLabel && <span className="ai-state-pill">{aiStateLabel}</span>}
+                  {speechSupported && (
+                    <button
+                      type="button"
+                      className={`read-toggle ${isSpeaking ? "active" : ""}`}
+                      onClick={() => speakQuestion(currentQuestionText, currentQuestionSpeechKey, { force: true })}
+                      disabled={loadingInterview || submittingAnswer || !currentQuestionText}
+                    >
+                      <Volume2 size={14} aria-hidden="true" />
+                      {isSpeaking ? "Speaking…" : "Read aloud"}
+                    </button>
                   )}
                 </div>
-
-                {interview?.difficulty && (
-                  <div className="interview-difficulty">
-                    <strong>Difficulty:</strong> {interview.difficulty}
-                  </div>
-                )}
-
-                {interviewTopics.length > 0 && (
-                  <div className="interview-topics">
-                    <span className="interview-topics-label">Topics:</span>
-                    {interviewTopics.map((topic) => (
-                      <span key={topic} className="interview-topic-chip">
-                        {topic}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
-            )}
+
+              <h1 className="question-heading">
+                {currentQuestion?.text || "No question available."}
+              </h1>
+
+              {!speechSupported && (
+                <p className="hint-text" style={{ marginTop: 10 }}>Read aloud isn't available in this browser.</p>
+              )}
+
+              {/* DSA / LeetCode full problem statement — only shown when present */}
+              {currentQuestion?.description && (
+                <div className="dsa-block">
+                  <div>
+                    <p className="dsa-row-label">Problem description</p>
+                    <p className="dsa-text">{currentQuestion.description}</p>
+                  </div>
+
+                  {currentQuestion.examples?.length > 0 && (
+                    <div>
+                      <p className="dsa-row-label">Examples</p>
+                      <div className="dsa-examples">
+                        {currentQuestion.examples.map((ex, i) => (
+                          <div key={i} className="dsa-example-block">
+                            {ex.exampleText || `Example ${ex.exampleNum ?? i + 1}`}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {currentQuestion.constraints?.length > 0 && (
+                    <div>
+                      <p className="dsa-row-label">Constraints</p>
+                      <ul className="dsa-constraints">
+                        {currentQuestion.constraints.map((c, i) => (
+                          <li key={i}>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {currentQuestion.leetcodeUrl && (
+                    <a
+                      href={currentQuestion.leetcodeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="dsa-link"
+                    >
+                      View on LeetCode
+                      <ArrowRight size={13} aria-hidden="true" />
+                    </a>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section className="answer-block">
+              <div className="answer-block-header">
+                <p className="answer-label">Your response</p>
+                <span className="answer-count">{answeredWordCount} words</span>
+              </div>
+
+              <div className="answer-shell">
+                <textarea
+                  className="answer-area"
+                  value={currentAnswer}
+                  onChange={(e) => handleAnswerChange(e.target.value)}
+                  placeholder="Type your answer here…"
+                  disabled={loadingInterview || submittingAnswer || !currentQuestion}
+                />
+
+                {speechRecognitionAvailable ? (
+                  <button
+                    type="button"
+                    className={`mic-button ${isListening ? "listening" : ""}`}
+                    onClick={handleSpeechToggle}
+                    aria-label={isListening ? "Stop speech recognition" : "Start speech recognition"}
+                    title={isListening ? "Stop microphone" : "Start microphone"}
+                    disabled={loadingInterview || submittingAnswer || !currentQuestion}
+                  >
+                    <Mic size={17} aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
+
+              {!speechRecognitionAvailable && (
+                <p className="hint-text warning">
+                  Speech recognition is not supported in this browser. Please use Chrome or Edge.
+                </p>
+              )}
+            </section>
+
+            <div className="stage-footer-anchor">
+              <div className="stage-footer">
+                <p className="stage-feedback">
+                  {currentQuestion?.feedback || "Your answer will be evaluated after submission."}
+                </p>
+                <button
+                  type="button"
+                  className="continue-btn"
+                  onClick={handleNextQuestion}
+                  disabled={loadingInterview || submittingAnswer || !currentQuestion}
+                >
+                  {submittingAnswer ? (
+                    isLast ? "Completing…" : "Saving…"
+                  ) : isLast ? (
+                    "Submit Interview"
+                  ) : (
+                    <>
+                      Continue
+                      <ArrowRight size={16} aria-hidden="true" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
+        </main>
 
-          <div className="status-card">
-            <p className="status-heading">Interview Status</p>
-
-            <div className="status-timer-row">
-              <div
-                className={`timer-ring ${urgency !== "normal" ? urgency : ""}`}
-                style={{ "--progress": ringDegrees }}
-              >
-                <div className="timer-ring-inner" />
-              </div>
-              <span className={`timer-text ${urgency !== "normal" ? urgency : ""}`}>
-                {formatTime(secondsLeft)}
+        {/* ================= SIDE: interviewer + security ================= */}
+        <aside className="studio-side">
+          <div className="interviewer-card">
+            <div className={`interviewer-frame ${isSpeaking ? "speaking" : isListening ? "listening" : ""}`}>
+              <video
+                ref={videoRef}
+                src={interviewerVideo}
+                muted
+                loop
+                playsInline
+                preload="auto"
+                className="interviewer-video"
+              />
+              <span className={`interviewer-indicator ${isSpeaking ? "speaking" : isListening ? "listening" : ""}`}>
+                {isSpeaking ? "Speaking" : isListening ? "Listening" : "Standing by"}
               </span>
             </div>
 
-            <p className="status-question-count">
-              Question <span>{currentIndex + 1}</span> / {interviewQuestions.length}
-            </p>
-          </div>
-        </div>
-
-        {/* ── Anti-cheating status bar ── */}
-        {interviewStarted && (
-          <div className="anti-cheat-bar" role="status" aria-label="Security monitoring status">
-            <span className="anti-cheat-bar-title">
-              <Lock size={14} aria-hidden="true" />
-              Security Monitoring: Active
-            </span>
-            <span className={`anti-cheat-stat ${tabSwitchCount > 0 ? "nonzero" : ""}`}>
-              Tab switches: {tabSwitchCount}
-            </span>
-            <span className={`anti-cheat-stat ${fullscreenExitCount > 0 ? "nonzero" : ""}`}>
-              Fullscreen exits: {fullscreenExitCount}
-            </span>
-            <span className={`anti-cheat-stat ${copyAttemptCount > 0 ? "nonzero" : ""}`}>
-              Copy attempts: {copyAttemptCount}
-            </span>
-            <span className={`anti-cheat-stat ${pasteAttemptCount > 0 ? "nonzero" : ""}`}>
-              Paste attempts: {pasteAttemptCount}
-            </span>
-          </div>
-        )}
-
-        {/* ── Fullscreen exit banner ── */}
-        {interviewStarted && !isFullscreen && !fullscreenUnavailable && (
-          <div className="fullscreen-banner" role="alert">
-            <span className="fullscreen-banner-msg">
-              <AlertTriangle size={15} aria-hidden="true" />
-              Please return to fullscreen mode to continue the interview.
-            </span>
-            <button
-              type="button"
-              className="return-fullscreen-btn"
-              onClick={() => requestFullscreen()}
-            >
-              <Maximize2 size={14} aria-hidden="true" />
-              Return to Fullscreen
-            </button>
-          </div>
-        )}
-
-        <div className="question-card">
-          <div className="question-header-row">
-            <div>
-              <p className="question-of">
-                Question {currentIndex + 1} of {interviewQuestions.length || 0}
+            <div className="interviewer-meta">
+              <p className="interviewer-name">AI Interviewer</p>
+              <p className="interviewer-state">
+                {isSpeaking ? "Reading the question aloud" : isListening ? "Listening to your answer" : "Ready when you are"}
               </p>
-              <p className="question-text">{currentQuestion?.text || "No question available."}</p>
             </div>
 
-            {speechSupported ? (
+            <div className="gender-switcher" role="group" aria-label="Select interviewer">
               <button
                 type="button"
-                className={`read-question-btn ${isSpeaking ? "speaking" : ""}`}
-                onClick={() => speakQuestion(currentQuestionText, currentQuestionSpeechKey, { force: true })}
-                disabled={loadingInterview || submittingAnswer || !currentQuestionText}
+                className={`gender-btn ${interviewerGender === "male" ? "active" : ""}`}
+                onClick={() => handleGenderSwitch("male")}
+                aria-pressed={interviewerGender === "male"}
               >
-                {isSpeaking ? (
-                  <>
-                    <Volume2 size={15} aria-hidden="true" />
-                    Speaking...
-                  </>
-                ) : (
-                  <>
-                    <Volume2 size={15} aria-hidden="true" />
-                    Read Question
-                  </>
-                )}
+                Male
               </button>
-            ) : null}
+              <button
+                type="button"
+                className={`gender-btn ${interviewerGender === "female" ? "active" : ""}`}
+                onClick={() => handleGenderSwitch("female")}
+                aria-pressed={interviewerGender === "female"}
+              >
+                Female
+              </button>
+            </div>
           </div>
 
-          {/* DSA / LeetCode full problem statement — only shown when present */}
-          {currentQuestion?.description && (
-            <div className="dsa-problem">
-              <div>
-                <p className="dsa-section-label">Problem Description</p>
-                <p className="dsa-description">{currentQuestion.description}</p>
+          {interviewStarted && (
+            <>
+              <hr className="side-divider" />
+              <div className="security-card">
+                <p className="security-card-title">
+                  <ShieldCheck size={13} aria-hidden="true" />
+                  Monitoring
+                </p>
+                <ul>
+                  <li className={tabSwitchCount > 0 ? "flagged" : ""}>
+                    Tab switches <strong>{tabSwitchCount}</strong>
+                  </li>
+                  <li className={fullscreenExitCount > 0 ? "flagged" : ""}>
+                    Fullscreen exits <strong>{fullscreenExitCount}</strong>
+                  </li>
+                  <li className={copyAttemptCount > 0 ? "flagged" : ""}>
+                    Copy attempts <strong>{copyAttemptCount}</strong>
+                  </li>
+                  <li className={pasteAttemptCount > 0 ? "flagged" : ""}>
+                    Paste attempts <strong>{pasteAttemptCount}</strong>
+                  </li>
+                  <li className={cutAttemptCount > 0 ? "flagged" : ""}>
+                    Cut attempts <strong>{cutAttemptCount}</strong>
+                  </li>
+                </ul>
               </div>
+            </>
+          )}
+        </aside>
 
-              {currentQuestion.examples?.length > 0 && (
-                <div>
-                  <p className="dsa-section-label">Examples</p>
-                  <div className="dsa-examples">
-                    {currentQuestion.examples.map((ex, i) => (
-                      <div key={i} className="dsa-example-block">
-                        {ex.exampleText || `Example ${ex.exampleNum ?? i + 1}`}
-                      </div>
-                    ))}
+        {/* ================= LOBBY (pre-interview overlay) ================= */}
+        {!interviewStarted && (
+          <div className="studio-lobby">
+            <div className="lobby-card">
+              <span className="lobby-mark" aria-hidden="true">
+                <ShieldCheck size={24} />
+              </span>
+
+              <h1 className="lobby-title">Your interview is ready</h1>
+              <p className="lobby-sub">
+                {loadingInterview
+                  ? "Loading your interview…"
+                  : interview
+                  ? "Take a moment to review the details below, then start whenever you're ready."
+                  : interviewError || "Interview details are unavailable."}
+              </p>
+
+              {interview && !loadingInterview && (
+                <div className="lobby-grid">
+                  <div className="lobby-stat">
+                    <span>Role</span>
+                    <strong>{interview.role || "—"}</strong>
+                  </div>
+                  <div className="lobby-stat">
+                    <span>Difficulty</span>
+                    <strong>{interview.difficulty || "—"}</strong>
+                  </div>
+                  <div className="lobby-stat">
+                    <span>Questions</span>
+                    <strong>{interview.numberOfQuestions ?? totalQuestions ?? "—"}</strong>
+                  </div>
+                  <div className="lobby-stat">
+                    <span>Est. duration</span>
+                    <strong>{interview.duration ? `${interview.duration} min` : "—"}</strong>
                   </div>
                 </div>
               )}
 
-              {currentQuestion.constraints?.length > 0 && (
-                <div>
-                  <p className="dsa-section-label">Constraints</p>
-                  <ul className="dsa-constraints">
-                    {currentQuestion.constraints.map((c, i) => (
-                      <li key={i}>{c}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <div className="lobby-checklist">
+                <p className="lobby-checklist-title">Before you begin</p>
+                <ul>
+                  <li><Maximize2 size={15} aria-hidden="true" /> Fullscreen mode is required for the full session</li>
+                  <li><Eye size={15} aria-hidden="true" /> Tab switching is tracked</li>
+                  <li><ClipboardX size={15} aria-hidden="true" /> Copy, paste and cut are restricted</li>
+                  <li><Monitor size={15} aria-hidden="true" /> Right-click is disabled</li>
+                </ul>
+              </div>
 
-              {currentQuestion.leetcodeUrl && (
-                <a
-                  href={currentQuestion.leetcodeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="dsa-leetcode-link"
-                >
-                  View on LeetCode
-                  <ArrowRight size={14} aria-hidden="true" />
-                </a>
-              )}
+              {fullscreenError && <div className="lobby-error">{fullscreenError}</div>}
+
+              <button
+                type="button"
+                className="lobby-start-btn"
+                onClick={handleStartInterview}
+                disabled={loadingInterview || startingInterview || Boolean(interviewError)}
+              >
+                {startingInterview ? (
+                  <>
+                    <LoaderCircle size={18} className="spin" aria-hidden="true" />
+                    Starting…
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck size={18} aria-hidden="true" />
+                    Start Interview
+                  </>
+                )}
+              </button>
             </div>
-          )}
-
-          {!speechSupported ? (
-            <p className="read-question-fallback">Read aloud is not available in this browser.</p>
-          ) : null}
-        </div>
-
-        <div className="answer-input-wrap">
-          <textarea
-            className="answer-area"
-            value={currentAnswer}
-            onChange={(e) => handleAnswerChange(e.target.value)}
-            placeholder="Type your answer here..."
-            disabled={loadingInterview || submittingAnswer || !currentQuestion}
-          />
-
-          {speechRecognitionAvailable ? (
-            <button
-              type="button"
-              className={`mic-button ${isListening ? "listening" : ""}`}
-              onClick={handleSpeechToggle}
-              aria-label={isListening ? "Stop speech recognition" : "Start speech recognition"}
-              title={isListening ? "Stop microphone" : "Start microphone"}
-              disabled={loadingInterview || submittingAnswer || !currentQuestion}
-            >
-              <Mic size={18} aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-
-        {!speechRecognitionAvailable && (
-          <div className="speech-warning">
-            Speech recognition is not supported in this browser. Please use Chrome or Edge.
           </div>
         )}
-
-        <div className="feedback-card">
-          <p className="feedback-text">
-            {currentQuestion?.feedback || "Your answer will be evaluated after submission."}
-          </p>
-          <button
-            className="next-question-btn"
-            onClick={handleNextQuestion}
-            disabled={loadingInterview || submittingAnswer || !currentQuestion}
-          >
-            {submittingAnswer ? (isLast ? "Completing..." : "Saving...") : isLast ? "Submit Interview" : (
-              <>
-                Next Question
-                <ArrowRight size={16} aria-hidden="true" />
-              </>
-            )}
-          </button>
-        </div>
       </div>
 
       {/* ── Warning snackbar (tab switch, clipboard, fullscreen) ── */}

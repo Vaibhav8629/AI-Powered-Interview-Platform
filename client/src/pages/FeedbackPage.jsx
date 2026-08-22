@@ -1,31 +1,195 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import api from "../services/api";
 import {
-  AlertTriangle,
-  ArrowLeft,
-  BarChart3,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Inbox,
-  MessageSquare,
-  RefreshCw,
-  Sparkles,
-  Target,
-  TrendingUp,
-  Zap,
+  AlertTriangle, ArrowLeft, ArrowRight, Award, BarChart3, CheckCircle2,
+  ChevronLeft, ChevronRight, Clock, Compass, MessageSquare, RefreshCw,
+  Sparkles, Target, TrendingDown, TrendingUp, Zap, Loader2,
 } from "lucide-react";
 
+/* ─── Score helpers ───────────────────────────────────────────────────────── */
+function scorePercent(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return 0;
+  const max = value > 10 ? 100 : 10;
+  return Math.max(0, Math.min(100, (value / max) * 100));
+}
+
+function performanceLabel(percent) {
+  if (typeof percent !== "number" || Number.isNaN(percent)) return "Not enough data";
+  if (percent >= 90) return "Exceptional";
+  if (percent >= 75) return "Strong";
+  if (percent >= 60) return "Solid";
+  if (percent >= 40) return "Developing";
+  return "Needs practice";
+}
+
+function scoreColor(percent) {
+  if (percent >= 75) return "#059669";
+  if (percent >= 50) return "#d97706";
+  return "#dc2626";
+}
+
+function formatDate(value) {
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  } catch { return null; }
+}
+
 const SCORE_CONFIG = [
-  { key: "overallScore", label: "Overall", icon: Target, highlight: true },
+  { key: "overallScore", label: "Overall", icon: Target },
   { key: "confidenceScore", label: "Confidence", icon: Sparkles },
   { key: "correctnessScore", label: "Correctness", icon: CheckCircle2 },
   { key: "communicationScore", label: "Communication", icon: MessageSquare },
 ];
 
+const LOADING_PHRASES = [
+  "Analyzing your responses…",
+  "Evaluating communication signal…",
+  "Scoring technical accuracy…",
+  "Assembling your performance report…",
+];
+
+/* ─── Score gauge SVG ─────────────────────────────────────────────────────── */
+function ScoreGauge({ value }) {
+  const pct = scorePercent(value);
+  const radius = 88;
+  const stroke = 12;
+  const cx = 100;
+  const cy = 100;
+  const arc = (2 * Math.PI * radius * 270) / 360;
+  const offset = arc - (pct / 100) * arc;
+  const color = scoreColor(pct);
+
+  return (
+    <div style={{ position: "relative", width: 200, height: 200 }}>
+      <svg width="200" height="200" viewBox="0 0 200 200">
+        <circle cx={cx} cy={cy} r={radius} stroke="#f1f5f9" strokeWidth={stroke} fill="none"
+          strokeDasharray={`${arc} ${2 * Math.PI * radius}`}
+          strokeDashoffset={`-${(2 * Math.PI * radius * 45) / 360}`}
+          strokeLinecap="round" style={{ transform: "rotate(135deg)", transformOrigin: "100px 100px" }}
+        />
+        <motion.circle cx={cx} cy={cy} r={radius} stroke={color} strokeWidth={stroke} fill="none"
+          strokeDasharray={`${arc} ${2 * Math.PI * radius}`}
+          initial={{ strokeDashoffset: arc }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
+          strokeLinecap="round" style={{ transform: "rotate(135deg)", transformOrigin: "100px 100px" }}
+        />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5, duration: 0.4 }}
+          style={{ fontSize: 48, fontWeight: 900, color: "#0f172a", letterSpacing: "-0.04em", lineHeight: 1 }}
+        >
+          {value != null ? Math.round(value) : "—"}
+        </motion.span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", marginTop: 2 }}>out of 100</span>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Dimension bar row ───────────────────────────────────────────────────── */
+function DimensionRow({ item, delay }) {
+  const Icon = item.icon;
+  const pct = item.percent;
+  const color = scoreColor(pct);
+  return (
+    <motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay, duration: 0.4 }}
+      style={{ display: "grid", gridTemplateColumns: "180px 1fr 64px", alignItems: "center", gap: 20, padding: "16px 0", borderTop: "1px solid #f1f5f9" }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: `${color}12`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icon size={16} color={color} />
+        </div>
+        <span style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a" }}>{item.label}</span>
+      </div>
+      <div style={{ height: 8, borderRadius: 99, background: "#f1f5f9", overflow: "hidden" }}>
+        <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 1.1, ease: "easeOut", delay: delay + 0.2 }}
+          style={{ height: "100%", borderRadius: 99, background: `linear-gradient(90deg, ${color}99, ${color})` }}
+        />
+      </div>
+      <div style={{ textAlign: "right", fontSize: 18, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em" }}>
+        {typeof item.value === "number" ? Math.round(item.value) : "—"}
+        <span style={{ fontSize: 10, fontWeight: 650, color: "#94a3b8", marginLeft: 2 }}>/100</span>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─── Mini score badge ────────────────────────────────────────────────────── */
+function MiniScore({ value }) {
+  const pct = scorePercent(value);
+  const color = scoreColor(pct);
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 99, background: `${color}12`, border: `1px solid ${color}30`, color, fontSize: 13, fontWeight: 800 }}>
+      {typeof value === "number" ? Math.round(value) : "—"}/100
+    </div>
+  );
+}
+
+/* ─── Loading state ───────────────────────────────────────────────────────── */
+function LoadingState() {
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setPhraseIndex(i => (i + 1) % LOADING_PHRASES.length), 2200);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", textAlign: "center" }}>
+      <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #ecfdf5, #d1fae5)", border: "2px solid rgba(16,185,129,0.2)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 28 }}>
+        <Loader2 size={32} color="#059669" style={{ animation: "spin 1s linear infinite" }} />
+      </div>
+      <AnimatePresence mode="wait">
+        <motion.p key={phraseIndex} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+          style={{ fontSize: 17, fontWeight: 650, color: "#374151", margin: "0 0 8px" }}
+        >
+          {LOADING_PHRASES[phraseIndex]}
+        </motion.p>
+      </AnimatePresence>
+      <p style={{ fontSize: 14, color: "#94a3b8", margin: 0 }}>This usually takes a few seconds</p>
+    </div>
+  );
+}
+
+/* ─── Error / Empty states ────────────────────────────────────────────────── */
+function ErrorState({ message, onRetry }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "60px 24px" }}>
+      <div style={{ width: 64, height: 64, borderRadius: 16, background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+        <AlertTriangle size={28} color="#dc2626" />
+      </div>
+      <h3 style={{ fontSize: 18, fontWeight: 750, color: "#0f172a", margin: "0 0 8px" }}>Couldn't load feedback</h3>
+      <p style={{ fontSize: 14.5, color: "#64748b", margin: "0 0 24px", maxWidth: 360 }}>{message}</p>
+      <button type="button" onClick={onRetry}
+        style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, fontSize: 14, fontWeight: 650, cursor: "pointer" }}
+      >
+        <RefreshCw size={15} /> Try again
+      </button>
+    </div>
+  );
+}
+
+function EmptyState({ onRetry }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "60px 24px" }}>
+      <div style={{ width: 64, height: 64, borderRadius: 16, background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+        <Sparkles size={28} color="#10b981" />
+      </div>
+      <h3 style={{ fontSize: 18, fontWeight: 750, color: "#0f172a", margin: "0 0 8px" }}>No feedback available</h3>
+      <p style={{ fontSize: 14.5, color: "#64748b", margin: "0 0 24px", maxWidth: 360 }}>Feedback hasn't been generated for this session yet.</p>
+      <button type="button" onClick={onRetry}
+        style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "linear-gradient(135deg, #047857, #10b981)", border: "none", borderRadius: 9, fontSize: 14, fontWeight: 700, color: "#fff", cursor: "pointer" }}
+      >
+        <RefreshCw size={15} /> Generate feedback
+      </button>
+    </div>
+  );
+}
+
+/* ─── Main page ───────────────────────────────────────────────────────────── */
 export default function InterviewFeedback() {
   const { interviewId } = useParams();
   const navigate = useNavigate();
@@ -35,1010 +199,307 @@ export default function InterviewFeedback() {
   const [feedback, setFeedback] = useState(initialFeedback);
   const [status, setStatus] = useState(initialFeedback ? "success" : "loading");
   const [errorMessage, setErrorMessage] = useState("");
-  const [expandedQuestions, setExpandedQuestions] = useState({});
+  const [activeQuestion, setActiveQuestion] = useState(0);
 
   const fetchFeedback = useCallback(async () => {
-    if (location.state?.feedback) {
-      setFeedback(location.state.feedback);
-      setStatus("success");
-      return;
-    }
-
-    if (!interviewId) {
-      setStatus("error");
-      setErrorMessage("No interview ID found in the URL.");
-      return;
-    }
-
-    setStatus("loading");
-    setErrorMessage("");
-
+    if (location.state?.feedback) { setFeedback(location.state.feedback); setStatus("success"); setActiveQuestion(0); return; }
+    if (!interviewId) { setStatus("error"); setErrorMessage("No interview ID found in the URL."); return; }
+    setStatus("loading"); setErrorMessage("");
     try {
       const { data } = await api.post(`/api/interview/${interviewId}/feedback`);
       const result = data?.feedback ?? data;
-
-      const hasContent =
-        result &&
-        (typeof result.overallScore === "number" ||
-          typeof result.overallSummary === "string" ||
-          (Array.isArray(result.questionWiseFeedback) &&
-            result.questionWiseFeedback.length > 0));
-
-      if (!hasContent) {
-        setFeedback(null);
-        setStatus("empty");
-        return;
-      }
-
-      setFeedback(result);
-      setStatus("success");
-    } catch (err) {
-      setErrorMessage(err.message || "Something went wrong while fetching feedback.");
-      setStatus("error");
-    }
+      const hasContent = result && (typeof result.overallScore === "number" || typeof result.overallSummary === "string" || (Array.isArray(result.questionWiseFeedback) && result.questionWiseFeedback.length > 0));
+      if (!hasContent) { setFeedback(null); setStatus("empty"); return; }
+      setFeedback(result); setStatus("success"); setActiveQuestion(0);
+    } catch (err) { setErrorMessage(err.message || "Something went wrong while fetching feedback."); setStatus("error"); }
   }, [interviewId, location.state]);
 
   useEffect(() => {
-    if (location.state?.feedback) {
-      setFeedback(location.state.feedback);
-      setStatus("success");
-      return;
-    }
-
+    if (location.state?.feedback) { setFeedback(location.state.feedback); setStatus("success"); setActiveQuestion(0); return; }
     fetchFeedback();
   }, [fetchFeedback, location.state]);
 
-  const toggleQuestion = (idx) => {
-    setExpandedQuestions((prev) => ({ ...prev, [idx]: !prev[idx] }));
-  };
+  const questionFeedback = Array.isArray(feedback?.questionWiseFeedback) ? feedback.questionWiseFeedback : [];
+  const scoreValues = SCORE_CONFIG.map(item => feedback?.[item.key]).filter(v => typeof v === "number" && !Number.isNaN(v));
+  const averageScore = scoreValues.length ? Math.round(scoreValues.reduce((s, v) => s + v, 0) / scoreValues.length) : null;
 
-  const questionFeedback = Array.isArray(feedback?.questionWiseFeedback)
-    ? feedback.questionWiseFeedback
-    : [];
-  const scoreValues = SCORE_CONFIG.map((item) => feedback?.[item.key]).filter(
-    (value) => typeof value === "number" && !Number.isNaN(value)
-  );
-  const averageScore = scoreValues.length
-    ? Math.round(scoreValues.reduce((sum, value) => sum + value, 0) / scoreValues.length)
-    : null;
+  const dimensionData = SCORE_CONFIG
+    .filter(item => item.key !== "overallScore")
+    .map(item => ({ ...item, value: feedback?.[item.key] }))
+    .filter(item => typeof item.value === "number" && !Number.isNaN(item.value))
+    .map(item => ({ ...item, percent: scorePercent(item.value) }))
+    .sort((a, b) => b.percent - a.percent);
+
+  const strongestDimension = dimensionData[0] || null;
+  const weakestDimension = dimensionData.length > 1 ? dimensionData[dimensionData.length - 1] : null;
+
+  const scoredQuestions = questionFeedback.map((item, idx) => ({ ...item, idx })).filter(item => typeof item.score === "number");
+  const strongestQuestion = scoredQuestions.length ? scoredQuestions.reduce((best, item) => item.score > best.score ? item : best) : null;
+  const weakestQuestion = scoredQuestions.length > 1 ? scoredQuestions.reduce((worst, item) => item.score < worst.score ? item : worst) : null;
+
+  const selectedQuestion = questionFeedback.length > 0 ? questionFeedback[Math.min(activeQuestion, questionFeedback.length - 1)] : null;
+
+  const metaRole = typeof feedback?.role === "string" ? feedback.role : null;
+  const metaType = typeof feedback?.interviewType === "string" ? feedback.interviewType : null;
+  const metaDate = feedback?.completedAt ? formatDate(feedback.completedAt) : null;
+
+  const averagePct = scorePercent(averageScore);
+  const perfLabel = performanceLabel(averagePct);
+  const perfColor = scoreColor(averagePct);
 
   return (
-    <div className="feedback-page">
-      <header className="feedback-nav">
-        <button type="button" onClick={() => navigate("/")} className="brand" aria-label="InterviewAI home">
-          <span className="brand-mark"><Zap size={17} aria-hidden="true" /></span>
-          <span>InterviewAI</span>
-        </button>
+    <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
+      {/* Header */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #f1f5f9", position: "sticky", top: 0, zIndex: 20, backdropFilter: "blur(12px)" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px", height: 60, display: "flex", alignItems: "center", gap: 12 }}>
+          <button type="button" onClick={() => navigate("/")} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #047857, #10b981)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Zap size={14} color="#fff" />
+            </div>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>InterviewAI</span>
+          </button>
+          <span style={{ color: "#94a3b8", fontSize: 14 }}>/</span>
+          <span style={{ fontSize: 14, color: "#64748b", fontWeight: 600 }}>Interview Report</span>
+          <button type="button" onClick={() => navigate(-1)}
+            style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 99, fontSize: 13, fontWeight: 700, color: "#374151", cursor: "pointer", transition: "all 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = "#10b981"}
+            onMouseLeave={e => e.currentTarget.style.borderColor = "#e2e8f0"}
+          >
+            <ArrowLeft size={14} /> Back
+          </button>
+        </div>
+      </div>
 
-        <button type="button" onClick={() => navigate(-1)} className="ghost-button">
-          <ArrowLeft size={16} aria-hidden="true" />
-          <span>Back</span>
-        </button>
-      </header>
-
-      <main className="feedback-shell">
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px 80px" }}>
         {status === "loading" && <LoadingState />}
         {status === "error" && <ErrorState message={errorMessage} onRetry={fetchFeedback} />}
         {status === "empty" && <EmptyState onRetry={fetchFeedback} />}
 
         {status === "success" && feedback && (
-          <>
-            <section className="feedback-hero">
-              <motion.div
-                className="hero-copy"
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <div className="eyebrow-pill">
-                  <Sparkles size={14} aria-hidden="true" />
-                  AI-generated interview feedback
-                </div>
-                <h1>Your interview review is ready.</h1>
-                <p>
-                  A focused breakdown of your performance across answer quality,
-                  confidence, communication, and question-level feedback.
+          <div>
+            {/* ── 1. REPORT HEADER ── */}
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ marginBottom: 40 }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 99, background: "#ecfdf5", border: "1px solid rgba(16,185,129,0.25)", color: "#047857", fontSize: 11.5, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 16 }}>
+                <Sparkles size={12} /> AI-generated performance report
+              </div>
+              <h1 style={{ fontSize: "clamp(28px, 3.5vw, 44px)", fontWeight: 900, color: "#0f172a", letterSpacing: "-0.025em", margin: "0 0 16px", lineHeight: 1.1 }}>
+                Interview review
+              </h1>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                {[
+                  { icon: CheckCircle2, text: "Interview complete" },
+                  { icon: MessageSquare, text: `${questionFeedback.length} question${questionFeedback.length !== 1 ? "s" : ""} reviewed` },
+                  metaRole && { icon: Target, text: metaRole },
+                  metaType && { icon: BarChart3, text: metaType },
+                  metaDate && { icon: Clock, text: metaDate },
+                ].filter(Boolean).map((m, i) => (
+                  <span key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13.5, fontWeight: 650, color: "#4b5563", padding: "5px 12px", background: "#fff", border: "1px solid #f1f5f9", borderRadius: 99 }}>
+                    <m.icon size={13} color="#059669" /> {m.text}
+                  </span>
+                ))}
+              </div>
+            </motion.div>
+
+            {/* ── 2. SCORE STAGE ── */}
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 48, alignItems: "center", background: "#fff", borderRadius: 20, padding: "36px", border: "1px solid #f1f5f9", boxShadow: "0 4px 20px rgba(15,23,42,0.06)", marginBottom: 24 }} className="score-stage-grid">
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.6, delay: 0.1 }}>
+                <ScoreGauge value={averageScore} />
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#059669", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Performance read</div>
+                <h2 style={{ fontSize: "clamp(24px, 2.8vw, 34px)", fontWeight: 850, color: "#0f172a", letterSpacing: "-0.02em", margin: "0 0 10px" }}>{perfLabel}</h2>
+                <p style={{ fontSize: 15, color: "#4b5563", lineHeight: 1.7, margin: "0 0 24px", maxWidth: 480 }}>
+                  Composite score across every dimension evaluated in this session.
                 </p>
-                <div className="hero-assurance">
-                  <span><CheckCircle2 size={15} aria-hidden="true" /> Role-based review</span>
-                  <span><BarChart3 size={15} aria-hidden="true" /> Scored signals</span>
-                  <span><MessageSquare size={15} aria-hidden="true" /> Question notes</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                  {strongestDimension && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", background: "#fff", border: "1px solid #f1f5f9", borderRadius: 12, boxShadow: "0 2px 8px rgba(15,23,42,0.04)" }}>
+                      <TrendingUp size={17} color="#059669" />
+                      <div>
+                        <div style={{ fontSize: 10.5, fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em" }}>Strongest area</div>
+                        <div style={{ fontSize: 14, fontWeight: 750, color: "#0f172a" }}>{strongestDimension.label}</div>
+                      </div>
+                    </div>
+                  )}
+                  {weakestDimension && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", background: "#fff", border: "1px solid #f1f5f9", borderRadius: 12, boxShadow: "0 2px 8px rgba(15,23,42,0.04)" }}>
+                      <Compass size={17} color="#d97706" />
+                      <div>
+                        <div style={{ fontSize: 10.5, fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em" }}>Focus area</div>
+                        <div style={{ fontSize: 14, fontWeight: 750, color: "#0f172a" }}>{weakestDimension.label}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
+            </div>
 
-              <motion.aside
-                className="review-snapshot"
-                initial={{ opacity: 0, y: 24, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
+            {/* ── 3. DIMENSION SPECTRUM ── */}
+            {dimensionData.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}
+                style={{ background: "#fff", borderRadius: 20, padding: "32px 36px", border: "1px solid #f1f5f9", boxShadow: "0 4px 20px rgba(15,23,42,0.06)", marginBottom: 24 }}
               >
-                <div className="snapshot-topline">
-                  <span>Session signal</span>
-                  <span className="live-status"><span /> Complete</span>
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#059669", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Performance breakdown</div>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.015em" }}>How each dimension scored</h2>
                 </div>
-                <div className="snapshot-score">
-                  <span>{formatScore(averageScore)}</span>
-                  <small>{scoreSuffix(averageScore)}</small>
-                </div>
-                <div className="snapshot-track">
-                  <span style={{ width: `${scorePercent(averageScore)}%` }} />
-                </div>
-                <div className="snapshot-meta">
-                  <span><Clock size={15} aria-hidden="true" /> {questionFeedback.length || 0} questions reviewed</span>
-                  <span><TrendingUp size={15} aria-hidden="true" /> Practice-ready insights</span>
-                </div>
-              </motion.aside>
-            </section>
-
-            <section className="score-grid" aria-label="Interview scores">
-              {SCORE_CONFIG.map((item, index) => {
-                const Icon = item.icon;
-                return (
-                  <ScoreCard
-                    key={item.key}
-                    label={item.label}
-                    value={feedback[item.key]}
-                    icon={<Icon size={19} aria-hidden="true" />}
-                    highlight={item.highlight}
-                    delay={index * 0.06}
-                  />
-                );
-              })}
-            </section>
-
-            {feedback.overallSummary && (
-              <motion.section
-                className="summary-panel"
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
-              >
-                <div className="section-title">
-                  <span><Sparkles size={17} aria-hidden="true" /></span>
-                  <div>
-                    <p>Overall summary</p>
-                    <h2>What stood out in this session</h2>
-                  </div>
-                </div>
-                <p className="summary-copy">{feedback.overallSummary}</p>
-              </motion.section>
+                {dimensionData.map((item, i) => <DimensionRow key={item.key} item={item} delay={0.08 * i} />)}
+              </motion.div>
             )}
 
-            <section className="question-section">
-              <div className="section-heading">
-                <div className="section-title">
-                  <span><MessageSquare size={17} aria-hidden="true" /></span>
+            {/* ── 4. AI INSIGHT ── */}
+            {feedback.overallSummary && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.5 }}
+                style={{ background: "linear-gradient(135deg, #022c22, #047857 70%)", borderRadius: 20, padding: "36px", marginBottom: 24, position: "relative", overflow: "hidden" }}
+              >
+                <div style={{ position: "absolute", inset: 0, backgroundImage: "radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "24px 24px" }} aria-hidden="true" />
+                <div style={{ position: "relative", zIndex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#6ee7b7", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>AI performance insight</div>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "0 0 16px" }}>What stood out this session</h2>
+                  <p style={{ fontSize: 16, color: "rgba(255,255,255,0.82)", lineHeight: 1.8, margin: 0, maxWidth: 740 }}>
+                    {feedback.overallSummary}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ── 5. QUESTION REPORT ── */}
+            {questionFeedback.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.5 }}
+                style={{ background: "#fff", borderRadius: 20, border: "1px solid #f1f5f9", boxShadow: "0 4px 20px rgba(15,23,42,0.06)", overflow: "hidden", marginBottom: 24 }}
+              >
+                <div style={{ padding: "28px 32px", borderBottom: "1px solid #f8fafc", display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
                   <div>
-                    <p>Question-wise feedback</p>
-                    <h2>Review each answer</h2>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#059669", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Question-by-question review</div>
+                    <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", margin: 0 }}>Walk through each answer</h2>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {strongestQuestion && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 99, background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#047857", fontSize: 12.5, fontWeight: 700 }}>
+                        <Award size={12} /> Strongest — Q{strongestQuestion.idx + 1}
+                      </span>
+                    )}
+                    {weakestQuestion && weakestQuestion.idx !== strongestQuestion?.idx && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 99, background: "#fffbeb", border: "1px solid #fcd34d", color: "#b45309", fontSize: 12.5, fontWeight: 700 }}>
+                        <TrendingDown size={12} /> Focus — Q{weakestQuestion.idx + 1}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <span className="count-pill">{questionFeedback.length} items</span>
-              </div>
 
-              {questionFeedback.length > 0 ? (
-                <div className="question-list">
-                  {questionFeedback.map((item, idx) => {
-                    const isOpen = !!expandedQuestions[idx];
-                    return (
-                      <article key={idx} className={`question-card ${isOpen ? "is-open" : ""}`}>
-                        <button type="button" onClick={() => toggleQuestion(idx)} className="question-button">
-                          <span className="question-index">{idx + 1}</span>
-                          <span className="question-text">{item.question || `Question ${idx + 1}`}</span>
-                          <span className="question-actions">
-                            {typeof item.score === "number" && (
-                              <span className="score-pill">{formatScore(item.score)}{scoreSuffix(item.score)}</span>
-                            )}
-                            {isOpen ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
+                <div style={{ display: "grid", gridTemplateColumns: "260px 1fr" }} className="qr-layout">
+                  {/* Rail */}
+                  <div style={{ borderRight: "1px solid #f8fafc", overflowY: "auto", maxHeight: 500 }}>
+                    {questionFeedback.map((item, idx) => {
+                      const isActive = idx === Math.min(activeQuestion, questionFeedback.length - 1);
+                      const hasScore = typeof item.score === "number";
+                      return (
+                        <button key={idx} type="button" onClick={() => setActiveQuestion(idx)}
+                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", background: isActive ? "#f0fdf4" : "none", border: "none", borderLeft: isActive ? "3px solid #10b981" : "3px solid transparent", cursor: "pointer", textAlign: "left", transition: "all 0.15s" }}
+                        >
+                          <span style={{ fontSize: 11.5, fontWeight: 800, color: isActive ? "#047857" : "#94a3b8", minWidth: 24, flexShrink: 0 }}>{String(idx + 1).padStart(2, "0")}</span>
+                          <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 550, color: isActive ? "#0f172a" : "#4b5563", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", flex: 1, lineHeight: 1.4 }}>
+                            {item.question || `Question ${idx + 1}`}
                           </span>
+                          {hasScore && (
+                            <div style={{ width: 7, height: 7, borderRadius: "50%", background: scoreColor(scorePercent(item.score)), flexShrink: 0 }} />
+                          )}
                         </button>
+                      );
+                    })}
+                  </div>
 
-                        {isOpen && (
-                          <div className="question-detail">
-                            {item.answer && (
-                              <div className="answer-block">
-                                <span>Your answer</span>
-                                <p>{item.answer}</p>
-                              </div>
-                            )}
-                            <div className="answer-block feedback-block">
-                              <span>Feedback</span>
-                              <p>{item.feedback || "No feedback provided for this question."}</p>
-                            </div>
+                  {/* Detail panel */}
+                  <AnimatePresence mode="wait">
+                    {selectedQuestion && (
+                      <motion.div key={activeQuestion} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.28 }}
+                        style={{ padding: "28px 32px", display: "flex", flexDirection: "column", gap: 20 }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: "#94a3b8" }}>
+                            Question {Math.min(activeQuestion, questionFeedback.length - 1) + 1} of {questionFeedback.length}
+                          </span>
+                          {typeof selectedQuestion.score === "number" && <MiniScore value={selectedQuestion.score} />}
+                        </div>
+
+                        <h3 style={{ fontSize: 17, fontWeight: 750, color: "#0f172a", margin: 0, lineHeight: 1.5 }}>
+                          {selectedQuestion.question || `Question ${activeQuestion + 1}`}
+                        </h3>
+
+                        {selectedQuestion.answer && (
+                          <div style={{ background: "#f8fafc", borderRadius: 12, padding: "16px 18px" }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Your answer</div>
+                            <p style={{ margin: 0, fontSize: 14.5, color: "#374151", lineHeight: 1.7 }}>{selectedQuestion.answer}</p>
                           </div>
                         )}
-                      </article>
-                    );
-                  })}
+
+                        <div style={{ background: "linear-gradient(135deg, #022c22, #064e3b)", borderRadius: 12, padding: "16px 18px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11, fontWeight: 800, color: "#6ee7b7", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+                            <Sparkles size={12} /> AI feedback
+                          </div>
+                          <p style={{ margin: 0, fontSize: 14.5, color: "rgba(255,255,255,0.84)", lineHeight: 1.75 }}>
+                            {selectedQuestion.feedback || "No feedback provided for this question."}
+                          </p>
+                        </div>
+
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <button type="button" onClick={() => setActiveQuestion(i => Math.max(0, i - 1))} disabled={activeQuestion <= 0}
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, fontSize: 13.5, fontWeight: 650, color: activeQuestion <= 0 ? "#cbd5e1" : "#374151", cursor: activeQuestion <= 0 ? "not-allowed" : "pointer", transition: "all 0.15s" }}
+                          >
+                            <ChevronLeft size={15} /> Previous
+                          </button>
+                          <button type="button" onClick={() => setActiveQuestion(i => Math.min(questionFeedback.length - 1, i + 1))} disabled={activeQuestion >= questionFeedback.length - 1}
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, fontSize: 13.5, fontWeight: 650, color: activeQuestion >= questionFeedback.length - 1 ? "#cbd5e1" : "#374151", cursor: activeQuestion >= questionFeedback.length - 1 ? "not-allowed" : "pointer", transition: "all 0.15s" }}
+                          >
+                            Next <ChevronRight size={15} />
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              ) : (
-                <div className="empty-inline">
-                  No question-wise feedback was returned for this interview.
-                </div>
-              )}
-            </section>
-          </>
+              </motion.div>
+            )}
+
+            {/* ── 6. NEXT STEPS ── */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.5 }}
+              style={{ background: "#fff", borderRadius: 20, border: "1px solid #f1f5f9", boxShadow: "0 4px 20px rgba(15,23,42,0.06)", padding: "36px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 24 }}
+            >
+              <div style={{ maxWidth: 500 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#059669", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>What's next</div>
+                <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", margin: "0 0 10px" }}>Keep building on this session</h2>
+                <p style={{ fontSize: 15, color: "#4b5563", lineHeight: 1.7, margin: 0 }}>
+                  Use this report to prioritize {weakestDimension ? weakestDimension.label.toLowerCase() : "your weaker areas"} in your next practice run.
+                </p>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                <button type="button" onClick={() => navigate("/interview/setup")}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 22px", background: "linear-gradient(135deg, #047857, #10b981)", border: "none", borderRadius: 10, fontSize: 14.5, fontWeight: 750, color: "#fff", cursor: "pointer", boxShadow: "0 4px 16px rgba(5,150,105,0.25)", transition: "transform 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px)"}
+                  onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}
+                >
+                  Start new interview <ArrowRight size={15} />
+                </button>
+                <button type="button" onClick={() => navigate("/interview/history")}
+                  style={{ padding: "12px 22px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, fontSize: 14.5, fontWeight: 650, color: "#374151", cursor: "pointer", transition: "all 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = "#10b981"}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = "#e2e8f0"}
+                >
+                  View all sessions
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
-      </main>
+      </div>
 
       <style>{`
-        .feedback-page {
-          --ink: #111827;
-          --muted: #5b6472;
-          --soft: #f6f8fb;
-          --panel: #ffffff;
-          --line: rgba(203,213,225,0.72);
-          --line-strong: rgba(15,23,42,0.14);
-          --emerald: #10b981;
-          --emerald-dark: #047857;
-          --teal-ink: #073b3a;
-          --amber: #f59e0b;
-          --rose: #e11d48;
-          --radius: 8px;
-          --shadow: 0 22px 60px rgba(15,23,42,0.12);
-          min-height: 100vh;
-          overflow-x: hidden;
-          color: var(--ink);
-          background:
-            linear-gradient(90deg, rgba(17,24,39,0.035) 1px, transparent 1px),
-            linear-gradient(180deg, rgba(17,24,39,0.035) 1px, transparent 1px),
-            radial-gradient(circle at 15% 10%, rgba(16,185,129,0.15), transparent 30%),
-            radial-gradient(circle at 90% 16%, rgba(245,158,11,0.12), transparent 28%),
-            linear-gradient(180deg, #fbfdfc 0%, #f6f8fb 100%);
-          background-size: 46px 46px, 46px 46px, auto, auto, auto;
-        }
-
-        .feedback-page * {
-          box-sizing: border-box;
-        }
-
-        .feedback-nav {
-          position: sticky;
-          top: 0;
-          z-index: 10;
-          width: min(1180px, calc(100% - 40px));
-          min-height: 74px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 18px;
-          margin: 0 auto;
-          backdrop-filter: blur(18px);
-        }
-
-        .brand {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          border: 0;
-          padding: 0;
-          background: transparent;
-          color: var(--ink);
-          font-size: 18px;
-          font-weight: 900;
-          letter-spacing: 0;
-          cursor: pointer;
-        }
-
-        .brand-mark {
-          width: 34px;
-          height: 34px;
-          display: grid;
-          place-items: center;
-          border-radius: var(--radius);
-          color: #fff;
-          background: linear-gradient(135deg, var(--teal-ink), var(--emerald));
-          box-shadow: 0 12px 24px rgba(16,185,129,0.24);
-        }
-
-        .feedback-shell {
-          width: min(1180px, calc(100% - 40px));
-          margin: 0 auto;
-          padding: 40px 0 80px;
-        }
-
-        .feedback-hero {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(360px, 0.46fr);
-          gap: 44px;
-          align-items: end;
-          margin-bottom: 24px;
-        }
-
-        .hero-copy h1 {
-          max-width: 780px;
-          margin: 18px 0 0;
-          color: var(--ink);
-          font-size: clamp(42px, 6.5vw, 76px);
-          line-height: 0.98;
-          letter-spacing: 0;
-        }
-
-        .hero-copy p {
-          max-width: 660px;
-          margin: 20px 0 0;
-          color: var(--muted);
-          font-size: 18px;
-          line-height: 1.72;
-        }
-
-        .eyebrow-pill {
-          width: fit-content;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          border: 1px solid rgba(16,185,129,0.22);
-          border-radius: 999px;
-          padding: 8px 12px;
-          background: rgba(236,253,245,0.9);
-          color: var(--emerald-dark);
-          font-size: 12px;
-          font-weight: 850;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-        }
-
-        .hero-assurance {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-          margin-top: 28px;
-        }
-
-        .hero-assurance span,
-        .snapshot-meta span {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          border: 1px solid var(--line);
-          border-radius: var(--radius);
-          padding: 10px 12px;
-          background: rgba(255,255,255,0.72);
-          color: var(--muted);
-          font-size: 13px;
-          font-weight: 800;
-        }
-
-        .hero-assurance svg,
-        .snapshot-meta svg {
-          color: var(--emerald-dark);
-        }
-
-        .review-snapshot,
-        .summary-panel,
-        .question-section,
-        .state-panel {
-          border: 1px solid var(--line);
-          border-radius: var(--radius);
-          background: rgba(255,255,255,0.86);
-          box-shadow: var(--shadow);
-          backdrop-filter: blur(18px);
-        }
-
-        .review-snapshot {
-          overflow: hidden;
-          padding: 24px;
-          background:
-            linear-gradient(135deg, rgba(17,24,39,0.96), rgba(7,59,58,0.96)),
-            #111827;
-          color: #fff;
-        }
-
-        .snapshot-topline {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 14px;
-          color: rgba(255,255,255,0.64);
-          font-size: 12px;
-          font-weight: 850;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-        }
-
-        .live-status {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          border-radius: 999px;
-          padding: 7px 10px;
-          background: rgba(236,253,245,0.12);
-          color: #86efac;
-          border: 1px solid rgba(134,239,172,0.22);
-          letter-spacing: 0;
-          text-transform: none;
-        }
-
-        .live-status span {
-          width: 8px;
-          height: 8px;
-          border-radius: 999px;
-          background: var(--emerald);
-          animation: pulse 1.5s ease-in-out infinite;
-        }
-
-        .snapshot-score {
-          display: flex;
-          align-items: baseline;
-          gap: 8px;
-          margin-top: 42px;
-        }
-
-        .snapshot-score span {
-          font-size: clamp(54px, 8vw, 86px);
-          font-weight: 900;
-          line-height: 0.9;
-          letter-spacing: 0;
-        }
-
-        .snapshot-score small {
-          color: rgba(255,255,255,0.58);
-          font-size: 18px;
-          font-weight: 850;
-        }
-
-        .snapshot-track {
-          height: 8px;
-          overflow: hidden;
-          margin-top: 20px;
-          border-radius: 999px;
-          background: rgba(255,255,255,0.12);
-        }
-
-        .snapshot-track span {
-          display: block;
-          height: 100%;
-          border-radius: inherit;
-          background: linear-gradient(90deg, #86efac, var(--emerald));
-        }
-
-        .snapshot-meta {
-          display: grid;
-          gap: 10px;
-          margin-top: 22px;
-        }
-
-        .snapshot-meta span {
-          border-color: rgba(255,255,255,0.12);
-          background: rgba(255,255,255,0.08);
-          color: rgba(255,255,255,0.78);
-        }
-
-        .snapshot-meta svg {
-          color: #86efac;
-        }
-
-        .score-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 14px;
-          margin-bottom: 18px;
-        }
-
-        .score-card {
-          padding: 20px;
-          border: 1px solid var(--line);
-          border-radius: var(--radius);
-          background: rgba(255,255,255,0.88);
-          box-shadow: 0 16px 44px rgba(15,23,42,0.07);
-        }
-
-        .score-card.highlight {
-          color: #fff;
-          border-color: transparent;
-          background: linear-gradient(135deg, var(--teal-ink), var(--emerald-dark) 56%, var(--emerald));
-          box-shadow: 0 20px 50px rgba(4,120,87,0.25);
-        }
-
-        .score-icon {
-          width: 42px;
-          height: 42px;
-          display: grid;
-          place-items: center;
-          border-radius: var(--radius);
-          background: #ecfdf5;
-          color: var(--emerald-dark);
-        }
-
-        .score-card.highlight .score-icon {
-          background: rgba(255,255,255,0.14);
-          color: #fff;
-        }
-
-        .score-value {
-          display: flex;
-          align-items: baseline;
-          gap: 4px;
-          margin-top: 18px;
-        }
-
-        .score-value strong {
-          color: var(--ink);
-          font-size: 34px;
-          line-height: 1;
-          letter-spacing: 0;
-        }
-
-        .score-value span {
-          color: #94a3b8;
-          font-size: 14px;
-          font-weight: 850;
-        }
-
-        .score-card.highlight .score-value strong,
-        .score-card.highlight .score-value span {
-          color: #fff;
-        }
-
-        .score-card p {
-          margin: 8px 0 0;
-          color: var(--muted);
-          font-size: 13px;
-          font-weight: 850;
-        }
-
-        .score-card.highlight p {
-          color: rgba(255,255,255,0.76);
-        }
-
-        .score-meter {
-          height: 7px;
-          overflow: hidden;
-          margin-top: 16px;
-          border-radius: 999px;
-          background: #e2e8f0;
-        }
-
-        .score-card.highlight .score-meter {
-          background: rgba(255,255,255,0.18);
-        }
-
-        .score-meter span {
-          display: block;
-          height: 100%;
-          border-radius: inherit;
-          background: linear-gradient(90deg, var(--emerald-dark), var(--emerald));
-        }
-
-        .score-card.highlight .score-meter span {
-          background: #86efac;
-        }
-
-        .summary-panel,
-        .question-section {
-          margin-top: 18px;
-          padding: 24px;
-        }
-
-        .section-heading {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 18px;
-          margin-bottom: 18px;
-        }
-
-        .section-title {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-        }
-
-        .section-title > span {
-          width: 38px;
-          height: 38px;
-          display: grid;
-          place-items: center;
-          flex: 0 0 auto;
-          border-radius: var(--radius);
-          background: #ecfdf5;
-          color: var(--emerald-dark);
-        }
-
-        .section-title p {
-          margin: 0;
-          color: var(--emerald-dark);
-          font-size: 12px;
-          font-weight: 850;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-        }
-
-        .section-title h2 {
-          margin: 4px 0 0;
-          color: var(--ink);
-          font-size: 22px;
-          line-height: 1.2;
-          letter-spacing: 0;
-        }
-
-        .summary-copy {
-          margin: 20px 0 0;
-          color: var(--muted);
-          font-size: 15px;
-          line-height: 1.8;
-        }
-
-        .count-pill,
-        .score-pill {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 999px;
-          padding: 7px 10px;
-          background: #ecfdf5;
-          color: var(--emerald-dark);
-          border: 1px solid rgba(16,185,129,0.22);
-          font-size: 12px;
-          font-weight: 850;
-          white-space: nowrap;
-        }
-
-        .question-list {
-          display: grid;
-          gap: 10px;
-        }
-
-        .question-card {
-          overflow: hidden;
-          border: 1px solid var(--line);
-          border-radius: var(--radius);
-          background: rgba(255,255,255,0.82);
-          transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .question-card.is-open {
-          border-color: rgba(16,185,129,0.32);
-          box-shadow: 0 16px 36px rgba(15,23,42,0.08);
-        }
-
-        .question-button {
-          width: 100%;
-          display: grid;
-          grid-template-columns: auto minmax(0, 1fr) auto;
-          align-items: center;
-          gap: 14px;
-          border: 0;
-          background: transparent;
-          color: var(--ink);
-          padding: 16px;
-          text-align: left;
-          cursor: pointer;
-        }
-
-        .question-index {
-          width: 30px;
-          height: 30px;
-          display: grid;
-          place-items: center;
-          border-radius: var(--radius);
-          background: #ecfdf5;
-          color: var(--emerald-dark);
-          font-size: 13px;
-          font-weight: 900;
-        }
-
-        .question-text {
-          min-width: 0;
-          color: var(--ink);
-          font-size: 15px;
-          font-weight: 850;
-          line-height: 1.45;
-        }
-
-        .question-actions {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          color: #94a3b8;
-        }
-
-        .question-detail {
-          display: grid;
-          gap: 12px;
-          padding: 0 16px 16px 60px;
-        }
-
-        .answer-block {
-          padding: 14px;
-          border: 1px solid rgba(203,213,225,0.72);
-          border-radius: var(--radius);
-          background: rgba(248,250,252,0.86);
-        }
-
-        .feedback-block {
-          background: rgba(236,253,245,0.56);
-          border-color: rgba(16,185,129,0.18);
-        }
-
-        .answer-block span {
-          display: block;
-          margin-bottom: 6px;
-          color: var(--emerald-dark);
-          font-size: 11px;
-          font-weight: 900;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-        }
-
-        .answer-block p {
-          margin: 0;
-          color: var(--muted);
-          font-size: 14px;
-          line-height: 1.7;
-        }
-
-        .empty-inline {
-          border: 1px dashed rgba(16,185,129,0.32);
-          border-radius: var(--radius);
-          padding: 28px;
-          background: rgba(255,255,255,0.74);
-          color: var(--muted);
-          text-align: center;
-          font-weight: 750;
-        }
-
-        .state-wrap {
-          min-height: calc(100vh - 194px);
-          display: grid;
-          place-items: center;
-          padding: 44px 0;
-        }
-
-        .state-panel {
-          width: min(520px, 100%);
-          padding: 34px;
-          text-align: center;
-        }
-
-        .state-icon {
-          width: 62px;
-          height: 62px;
-          display: grid;
-          place-items: center;
-          margin: 0 auto 18px;
-          border-radius: var(--radius);
-          background: #ecfdf5;
-          color: var(--emerald-dark);
-        }
-
-        .state-icon.error {
-          background: #fef2f2;
-          color: var(--rose);
-        }
-
-        .state-panel h2 {
-          margin: 0;
-          color: var(--ink);
-          font-size: 26px;
-          line-height: 1.15;
-          letter-spacing: 0;
-        }
-
-        .state-panel p {
-          margin: 10px 0 0;
-          color: var(--muted);
-          font-size: 15px;
-          line-height: 1.7;
-        }
-
-        .loader-ring {
-          width: 48px;
-          height: 48px;
-          margin: 0 auto 18px;
-          border: 4px solid rgba(16,185,129,0.14);
-          border-top-color: var(--emerald-dark);
-          border-radius: 999px;
-          animation: spin 0.9s linear infinite;
-        }
-
-        .ghost-button,
-        .solid-button {
-          min-height: 42px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          border-radius: var(--radius);
-          border: 1px solid var(--line);
-          padding: 0 17px;
-          font-weight: 750;
-          cursor: pointer;
-          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-        }
-
-        .ghost-button {
-          background: rgba(255,255,255,0.68);
-          color: var(--ink);
-        }
-
-        .solid-button {
-          margin-top: 22px;
-          border-color: transparent;
-          color: #fff;
-          background: linear-gradient(135deg, var(--teal-ink), var(--emerald-dark) 52%, var(--emerald));
-          box-shadow: 0 14px 32px rgba(4,120,87,0.28);
-        }
-
-        .ghost-button:hover,
-        .solid-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 16px 32px rgba(15,23,42,0.12);
-        }
-
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-
-        @keyframes pulse {
-          0%, 100% { opacity: 0.52; transform: scale(0.9); }
-          50% { opacity: 1; transform: scale(1); }
-        }
-
-        @media (max-width: 980px) {
-          .feedback-hero {
-            grid-template-columns: 1fr;
-            align-items: start;
-          }
-
-          .score-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-
-        @media (max-width: 640px) {
-          .feedback-nav,
-          .feedback-shell {
-            width: min(100% - 28px, 1180px);
-          }
-
-          .feedback-nav {
-            min-height: 66px;
-          }
-
-          .ghost-button span {
-            display: none;
-          }
-
-          .feedback-shell {
-            padding-top: 28px;
-          }
-
-          .hero-copy h1 {
-            font-size: clamp(38px, 13vw, 54px);
-          }
-
-          .hero-copy p {
-            font-size: 16px;
-          }
-
-          .score-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .summary-panel,
-          .question-section,
-          .review-snapshot,
-          .state-panel {
-            padding: 20px;
-          }
-
-          .section-heading {
-            align-items: flex-start;
-            flex-direction: column;
-          }
-
-          .question-button {
-            grid-template-columns: auto minmax(0, 1fr);
-          }
-
-          .question-actions {
-            grid-column: 2;
-            justify-self: start;
-          }
-
-          .question-detail {
-            padding-left: 16px;
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          *, *::before, *::after {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-          }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 768px) {
+          .score-stage-grid { grid-template-columns: 1fr !important; justify-items: center; }
+          .qr-layout { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </div>
   );
-}
-
-function ScoreCard({ label, value, icon, highlight, delay }) {
-  return (
-    <motion.article
-      className={`score-card ${highlight ? "highlight" : ""}`}
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1], delay }}
-    >
-      <div className="score-icon">{icon}</div>
-      <div className="score-value">
-        <strong>{formatScore(value)}</strong>
-        <span>{scoreSuffix(value)}</span>
-      </div>
-      <p>{label}</p>
-      <div className="score-meter" aria-hidden="true">
-        <span style={{ width: `${scorePercent(value)}%` }} />
-      </div>
-    </motion.article>
-  );
-}
-
-function LoadingState() {
-  return (
-    <div className="state-wrap">
-      <div className="state-panel">
-        <div className="loader-ring" />
-        <h2>Generating your interview feedback</h2>
-        <p>This can take a few seconds while the review is prepared.</p>
-      </div>
-    </div>
-  );
-}
-
-function ErrorState({ message, onRetry }) {
-  return (
-    <div className="state-wrap">
-      <div className="state-panel">
-        <div className="state-icon error">
-          <AlertTriangle size={24} aria-hidden="true" />
-        </div>
-        <h2>Could not load feedback</h2>
-        <p>{message || "Something went wrong while fetching your interview feedback."}</p>
-        <button type="button" onClick={onRetry} className="solid-button">
-          <RefreshCw size={16} aria-hidden="true" />
-          Try again
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ onRetry }) {
-  return (
-    <div className="state-wrap">
-      <div className="state-panel">
-        <div className="state-icon">
-          <Inbox size={24} aria-hidden="true" />
-        </div>
-        <h2>No feedback available yet</h2>
-        <p>
-          Feedback for this interview has not been generated yet, or the interview may not be
-          complete.
-        </p>
-        <button type="button" onClick={onRetry} className="solid-button">
-          <RefreshCw size={16} aria-hidden="true" />
-          Check again
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function formatScore(value) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "-";
-  return Math.round(value);
-}
-
-function scoreSuffix(value) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "";
-  return value > 10 ? "/100" : "/10";
-}
-
-function scorePercent(value) {
-  if (typeof value !== "number" || Number.isNaN(value)) return 0;
-  const max = value > 10 ? 100 : 10;
-  return Math.max(0, Math.min(100, (value / max) * 100));
 }

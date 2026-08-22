@@ -1,32 +1,30 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Eye, EyeOff, Zap, Mail, Lock, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  Eye, EyeOff, Zap, Mail, Lock, AlertCircle, CheckCircle2, Loader2,
+  ArrowLeft, Sparkles, Brain, BarChart3, Mic,
+} from "lucide-react";
 import { googleAuthApi, getApiErrorMessage } from "../services/api";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BASE_API = import.meta.env.VITE_BASE_API;
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-// ─── Google GSI script loader ─────────────────────────────────────────────────
+const FEATURES = [
+  { icon: Brain, text: "Adaptive AI interview questions" },
+  { icon: Mic, text: "Voice-native practice sessions" },
+  { icon: BarChart3, text: "Structured performance feedback" },
+  { icon: Sparkles, text: "Role & difficulty configuration" },
+];
+
 function useGoogleScript() {
   const [ready, setReady] = useState(false);
-
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
-
-    if (window.google?.accounts) {
-      setReady(true);
-      return;
-    }
-
+    if (window.google?.accounts) { setReady(true); return; }
     const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
-    if (existing) {
-      existing.addEventListener("load", () => setReady(true));
-      return;
-    }
-
+    if (existing) { existing.addEventListener("load", () => setReady(true)); return; }
     const script = document.createElement("script");
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
@@ -34,8 +32,18 @@ function useGoogleScript() {
     script.onload = () => setReady(true);
     document.head.appendChild(script);
   }, []);
-
   return ready;
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4" />
+      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853" />
+      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05" />
+      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335" />
+    </svg>
+  );
 }
 
 export default function Login() {
@@ -52,550 +60,207 @@ export default function Login() {
 
   const successMessage = location.state?.message;
 
-  // ── Google sign-in handler ──────────────────────────────────────────────────
-  const handleGoogleCredential = useCallback(
-    async (response) => {
-      if (!response?.credential) {
-        setError("Google sign-in was cancelled or failed.");
-        return;
-      }
-      setGoogleLoading(true);
-      setError("");
-      try {
-        const data = await googleAuthApi(response.credential);
-        if (data?.token) {
-          localStorage.setItem("token", data.token);
-        }
-        navigate("/", { replace: true });
-      } catch (err) {
-        setError(getApiErrorMessage(err, "Google sign-in failed. Please try again."));
-      } finally {
-        setGoogleLoading(false);
-      }
-    },
-    [navigate],
-  );
+  const handleGoogleCredential = useCallback(async (response) => {
+    if (!response?.credential) { setError("Google sign-in was cancelled or failed."); return; }
+    setGoogleLoading(true); setError("");
+    try {
+      const data = await googleAuthApi(response.credential);
+      if (data?.token) localStorage.setItem("token", data.token);
+      navigate("/", { replace: true });
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Google sign-in failed. Please try again."));
+    } finally { setGoogleLoading(false); }
+  }, [navigate]);
 
-  // ── Initialize Google Identity Services ────────────────────────────────────
   useEffect(() => {
     if (!googleReady || !GOOGLE_CLIENT_ID) return;
-
-    window.google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: handleGoogleCredential,
-      auto_select: false,
-      cancel_on_tap_outside: true,
-    });
+    window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential, auto_select: false, cancel_on_tap_outside: true });
   }, [googleReady, handleGoogleCredential]);
 
   const triggerGoogleSignIn = () => {
-    if (!googleReady || !GOOGLE_CLIENT_ID) {
-      setError("Google sign-in is not configured.");
-      return;
-    }
+    if (!googleReady || !GOOGLE_CLIENT_ID) { setError("Google sign-in is not configured."); return; }
     if (googleLoading || loading) return;
     window.google.accounts.id.prompt();
   };
 
-  // ── Email/password submit ───────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-
-    if (!email.trim() || !password.trim()) {
-      setError("Email and password are required.");
-      return;
-    }
-    if (!emailPattern.test(email.trim())) {
-      setError("Enter a valid email address.");
-      return;
-    }
-
+    if (!email.trim() || !password.trim()) { setError("Email and password are required."); return; }
+    if (!emailPattern.test(email.trim())) { setError("Enter a valid email address."); return; }
     try {
       setLoading(true);
-      const response = await fetch(`${BASE_API}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-
+      const response = await fetch(`${BASE_API}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
       const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data?.message || data?.msg || "Login failed.");
-      }
-
-      if (data?.token) {
-        localStorage.setItem("token", data.token);
-      }
+      if (!response.ok) throw new Error(data?.message || data?.msg || "Login failed.");
+      if (data?.token) localStorage.setItem("token", data.token);
       navigate("/", { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Login failed."); }
+    finally { setLoading(false); }
   };
 
   const isBusy = loading || googleLoading;
 
   return (
-    <div style={pageStyle}>
-      {/* Ambient blobs */}
-      <div style={blobA} aria-hidden="true" />
-      <div style={blobB} aria-hidden="true" />
+    <div style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: "1fr 1fr" }} className="auth-layout">
+      {/* Left panel */}
+      <div style={{ background: "linear-gradient(150deg, #022c22 0%, #047857 50%, #065f46 100%)", padding: "48px", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }} className="auth-left-panel">
+        {/* Grid pattern */}
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)", backgroundSize: "36px 36px" }} aria-hidden="true" />
+        {/* Glow */}
+        <div style={{ position: "absolute", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(52,211,153,0.15), transparent 70%)" }} aria-hidden="true" />
 
-      <motion.div
-        style={cardStyle}
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      >
-        {/* Brand */}
-        <div style={brandRow}>
-          <div style={logoBox}>
-            <Zap size={16} color="#ffffff" aria-hidden="true" />
-          </div>
-          <span style={brandName}>InterviewAI</span>
-        </div>
-
-        {/* Heading */}
-        <h1 style={headingStyle}>Welcome back</h1>
-        <p style={subheadingStyle}>Sign in to continue to your account</p>
-
-        {/* Success banner */}
-        <AnimatePresence>
-          {successMessage && (
-            <motion.div
-              style={{ ...alertStyle, ...alertSuccess }}
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-            >
-              <CheckCircle2 size={15} color="#067647" aria-hidden="true" />
-              <span>{successMessage}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Error banner */}
-        <AnimatePresence>
-          {error && (
-            <motion.div
-              role="alert"
-              style={{ ...alertStyle, ...alertError }}
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-            >
-              <AlertCircle size={15} color="#b42318" aria-hidden="true" />
-              <span>{error}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Email/Password form */}
-        <form onSubmit={handleSubmit} style={formStyle} noValidate>
-          {/* Email */}
-          <div style={fieldStyle}>
-            <label htmlFor="login-email" style={labelStyle}>Email address</label>
-            <div style={inputWrapStyle}>
-              <Mail size={16} style={inputIconStyle} aria-hidden="true" />
-              <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                disabled={isBusy}
-                style={inputStyle}
-                onFocus={(e) => Object.assign(e.target.style, inputFocusStyle)}
-                onBlur={(e) => Object.assign(e.target.style, inputBlurStyle)}
-              />
-            </div>
-          </div>
-
-          {/* Password */}
-          <div style={fieldStyle}>
-            <label htmlFor="login-password" style={labelStyle}>Password</label>
-            <div style={inputWrapStyle}>
-              <Lock size={16} style={inputIconStyle} aria-hidden="true" />
-              <input
-                id="login-password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                disabled={isBusy}
-                style={{ ...inputStyle, paddingRight: "44px" }}
-                onFocus={(e) => Object.assign(e.target.style, inputFocusStyle)}
-                onBlur={(e) => Object.assign(e.target.style, inputBlurStyle)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((s) => !s)}
-                style={eyeButtonStyle}
-                tabIndex={-1}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={16} color="#6b7e78" /> : <Eye size={16} color="#6b7e78" />}
-              </button>
-            </div>
-          </div>
-
-          {/* Sign in button */}
-          <motion.button
-            type="submit"
-            disabled={isBusy}
-            style={{ ...primaryBtn, ...(isBusy ? primaryBtnDisabled : {}) }}
-            whileHover={isBusy ? {} : { backgroundColor: "#0a4a38" }}
-            whileTap={isBusy ? {} : { scale: 0.985 }}
-            transition={{ duration: 0.15 }}
+        {/* Back to home */}
+        <div style={{ position: "relative", zIndex: 1, marginBottom: "auto" }}>
+          <button type="button" onClick={() => navigate("/")}
+            style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 9, padding: "8px 14px", color: "rgba(255,255,255,0.8)", fontSize: 13.5, fontWeight: 650, cursor: "pointer", transition: "all 0.15s" }}
           >
-            {loading ? (
-              <span style={btnContentStyle}>
-                <Loader2 size={16} style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true" />
-                Signing in…
-              </span>
-            ) : (
-              "Sign in"
-            )}
-          </motion.button>
-        </form>
-
-        {/* Divider */}
-        <div style={dividerStyle} aria-hidden="true">
-          <div style={dividerLine} />
-          <span style={dividerLabel}>OR</span>
-          <div style={dividerLine} />
+            <ArrowLeft size={15} /> Back home
+          </button>
         </div>
 
-        {/* Google button */}
-        <motion.button
-          type="button"
-          onClick={triggerGoogleSignIn}
-          disabled={isBusy || !GOOGLE_CLIENT_ID}
-          style={{
-            ...googleBtn,
-            ...((isBusy || !GOOGLE_CLIENT_ID) ? googleBtnDisabled : {}),
-          }}
-          whileHover={(isBusy || !GOOGLE_CLIENT_ID) ? {} : { backgroundColor: "#f0fdf4", borderColor: "#6ee7b7" }}
-          whileTap={(isBusy || !GOOGLE_CLIENT_ID) ? {} : { scale: 0.985 }}
-          transition={{ duration: 0.15 }}
-          aria-label="Continue with Google"
+        {/* Brand */}
+        <div style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 40 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Zap size={20} color="#fff" />
+            </div>
+            <span style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>InterviewAI</span>
+          </div>
+
+          <h2 style={{ fontSize: "clamp(28px, 2.8vw, 38px)", fontWeight: 850, color: "#fff", letterSpacing: "-0.025em", lineHeight: 1.15, margin: "0 0 16px" }}>
+            The interview room is ready for you.
+          </h2>
+          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.65)", lineHeight: 1.7, margin: "0 0 40px", maxWidth: 360 }}>
+            Practice with an AI that adapts to your answers — not a static list of questions.
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {FEATURES.map((f, i) => (
+              <motion.div key={f.text} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 + i * 0.08 }}
+                style={{ display: "flex", alignItems: "center", gap: 12 }}
+              >
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <f.icon size={17} color="rgba(255,255,255,0.8)" />
+                </div>
+                <span style={{ fontSize: 14.5, color: "rgba(255,255,255,0.75)", fontWeight: 550 }}>{f.text}</span>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel — form */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 32px", background: "#fff", overflowY: "auto" }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          style={{ width: "100%", maxWidth: 420 }}
         >
-          {googleLoading ? (
-            <span style={btnContentStyle}>
-              <Loader2 size={16} style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true" />
-              Connecting…
-            </span>
-          ) : (
-            <span style={btnContentStyle}>
-              <GoogleIcon />
-              Continue with Google
-            </span>
-          )}
-        </motion.button>
+          <div style={{ marginBottom: 32 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 850, color: "#0f172a", letterSpacing: "-0.025em", margin: "0 0 8px" }}>Welcome back</h1>
+            <p style={{ fontSize: 15, color: "#64748b", margin: 0 }}>Sign in to continue to your account</p>
+          </div>
 
-        {/* Footer */}
-        <p style={footerStyle}>
-          Don't have an account?{" "}
-          <Link to="/register" style={linkStyle}>
-            Sign up
-          </Link>
-        </p>
-      </motion.div>
+          {/* Success banner */}
+          <AnimatePresence>
+            {successMessage && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "11px 14px", borderRadius: 10, background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#047857", fontSize: 13.5, marginBottom: 18, overflow: "hidden" }}
+              >
+                <CheckCircle2 size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>{successMessage}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-      {/* Spin keyframe */}
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          {/* Error banner */}
+          <AnimatePresence>
+            {error && (
+              <motion.div role="alert" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "11px 14px", borderRadius: 10, background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", fontSize: 13.5, marginBottom: 18, overflow: "hidden" }}
+              >
+                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>{error}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Email */}
+            <div>
+              <label htmlFor="login-email" style={{ display: "block", fontSize: 13.5, fontWeight: 650, color: "#334155", marginBottom: 6 }}>Email address</label>
+              <div style={{ position: "relative" }}>
+                <Mail size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+                <input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" disabled={isBusy}
+                  style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "11px 14px 11px 42px", fontSize: 14.5, color: "#0f172a", background: "#f8fafc", outline: "none", transition: "all 0.18s" }}
+                  onFocus={e => { e.target.style.borderColor = "#10b981"; e.target.style.background = "#fff"; e.target.style.boxShadow = "0 0 0 3px rgba(16,185,129,0.1)"; }}
+                  onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.background = "#f8fafc"; e.target.style.boxShadow = "none"; }}
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div>
+              <label htmlFor="login-password" style={{ display: "block", fontSize: 13.5, fontWeight: 650, color: "#334155", marginBottom: 6 }}>Password</label>
+              <div style={{ position: "relative" }}>
+                <Lock size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+                <input id="login-password" type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" autoComplete="current-password" disabled={isBusy}
+                  style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "11px 44px 11px 42px", fontSize: 14.5, color: "#0f172a", background: "#f8fafc", outline: "none", transition: "all 0.18s" }}
+                  onFocus={e => { e.target.style.borderColor = "#10b981"; e.target.style.background = "#fff"; e.target.style.boxShadow = "0 0 0 3px rgba(16,185,129,0.1)"; }}
+                  onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.background = "#f8fafc"; e.target.style.boxShadow = "none"; }}
+                />
+                <button type="button" onClick={() => setShowPassword(s => !s)} tabIndex={-1} aria-label={showPassword ? "Hide password" : "Show password"}
+                  style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 4, cursor: "pointer", color: "#94a3b8", display: "flex", alignItems: "center" }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" disabled={isBusy}
+              style={{ width: "100%", padding: "12px 16px", background: isBusy ? "#a7f3d0" : "linear-gradient(135deg, #047857, #10b981)", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 750, color: "#fff", cursor: isBusy ? "not-allowed" : "pointer", boxShadow: isBusy ? "none" : "0 4px 16px rgba(5,150,105,0.28)", transition: "all 0.15s", marginTop: 4 }}
+            >
+              {loading ? (
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <Loader2 size={16} style={{ animation: "spin 0.8s linear infinite" }} /> Signing in…
+                </span>
+              ) : "Sign in"}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "22px 0" }}>
+            <div style={{ flex: 1, height: 1, background: "#f1f5f9" }} />
+            <span style={{ fontSize: 12, fontWeight: 650, color: "#94a3b8", letterSpacing: "0.04em" }}>OR</span>
+            <div style={{ flex: 1, height: 1, background: "#f1f5f9" }} />
+          </div>
+
+          {/* Google */}
+          <button type="button" onClick={triggerGoogleSignIn} disabled={isBusy || !GOOGLE_CLIENT_ID}
+            style={{ width: "100%", padding: "12px 16px", background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 14.5, fontWeight: 650, color: "#0f172a", cursor: isBusy ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, transition: "all 0.15s", opacity: (!GOOGLE_CLIENT_ID || isBusy) ? 0.55 : 1 }}
+            onMouseEnter={e => { if (!isBusy && GOOGLE_CLIENT_ID) { e.currentTarget.style.borderColor = "#6ee7b7"; e.currentTarget.style.background = "#f0fdf4"; }}}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.background = "#fff"; }}
+          >
+            {googleLoading ? <><Loader2 size={16} style={{ animation: "spin 0.8s linear infinite" }} /> Connecting…</> : <><GoogleIcon /> Continue with Google</>}
+          </button>
+
+          <p style={{ marginTop: 24, textAlign: "center", fontSize: 14, color: "#64748b" }}>
+            Don't have an account?{" "}
+            <Link to="/register" style={{ color: "#059669", fontWeight: 750, textDecoration: "none" }}>Create one free</Link>
+          </p>
+        </motion.div>
+      </div>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 768px) {
+          .auth-layout { grid-template-columns: 1fr !important; }
+          .auth-left-panel { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 }
-
-// ─── Google SVG icon ──────────────────────────────────────────────────────────
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" focusable="false">
-      <path
-        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
-        fill="#4285F4"
-      />
-      <path
-        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
-        fill="#34A853"
-      />
-      <path
-        d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
-        fill="#FBBC05"
-      />
-      <path
-        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-        fill="#EA4335"
-      />
-    </svg>
-  );
-}
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const pageStyle = {
-  minHeight: "100vh",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "24px",
-  background: "linear-gradient(135deg, #f0fdf4 0%, #e8f5f0 40%, #f5f7f8 100%)",
-  position: "relative",
-  overflow: "hidden",
-};
-
-const blobA = {
-  position: "absolute",
-  top: "-120px",
-  right: "-80px",
-  width: "480px",
-  height: "480px",
-  borderRadius: "50%",
-  background: "radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)",
-  pointerEvents: "none",
-};
-
-const blobB = {
-  position: "absolute",
-  bottom: "-160px",
-  left: "-100px",
-  width: "520px",
-  height: "520px",
-  borderRadius: "50%",
-  background: "radial-gradient(circle, rgba(5,150,105,0.09) 0%, transparent 70%)",
-  pointerEvents: "none",
-};
-
-const cardStyle = {
-  position: "relative",
-  zIndex: 1,
-  width: "100%",
-  maxWidth: "440px",
-  backgroundColor: "#ffffff",
-  border: "1px solid #d1e9e0",
-  borderRadius: "20px",
-  padding: "36px 32px 32px",
-  boxShadow: "0 4px 6px rgba(10,31,23,0.04), 0 20px 48px rgba(10,31,23,0.10), 0 0 0 1px rgba(16,185,129,0.06)",
-};
-
-const brandRow = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  marginBottom: "24px",
-};
-
-const logoBox = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: "32px",
-  height: "32px",
-  borderRadius: "8px",
-  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-  flexShrink: 0,
-  boxShadow: "0 2px 8px rgba(16,185,129,0.35)",
-};
-
-const brandName = {
-  fontSize: "15px",
-  fontWeight: 700,
-  color: "#0a1f17",
-  letterSpacing: "-0.01em",
-};
-
-const headingStyle = {
-  margin: "0 0 6px",
-  fontSize: "26px",
-  fontWeight: 800,
-  color: "#0a1f17",
-  letterSpacing: "-0.02em",
-  lineHeight: 1.2,
-};
-
-const subheadingStyle = {
-  margin: "0 0 20px",
-  fontSize: "14px",
-  color: "#6b7e78",
-  lineHeight: 1.5,
-};
-
-const alertStyle = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: "8px",
-  borderRadius: "10px",
-  padding: "10px 12px",
-  fontSize: "13.5px",
-  lineHeight: 1.45,
-  marginBottom: "16px",
-  overflow: "hidden",
-};
-
-const alertSuccess = {
-  background: "#f0fdf4",
-  border: "1px solid #bbf7d0",
-  color: "#067647",
-};
-
-const alertError = {
-  background: "#fef2f2",
-  border: "1px solid #fecaca",
-  color: "#b42318",
-};
-
-const formStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "16px",
-};
-
-const fieldStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "6px",
-};
-
-const labelStyle = {
-  fontSize: "13px",
-  fontWeight: 600,
-  color: "#214236",
-  letterSpacing: "0.005em",
-};
-
-const inputWrapStyle = {
-  position: "relative",
-  display: "flex",
-  alignItems: "center",
-};
-
-const inputIconStyle = {
-  position: "absolute",
-  left: "13px",
-  color: "#9cafa9",
-  pointerEvents: "none",
-  flexShrink: 0,
-};
-
-const inputStyle = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1.5px solid #d1e9e0",
-  borderRadius: "10px",
-  padding: "10px 12px 10px 40px",
-  fontSize: "14.5px",
-  color: "#0a1f17",
-  backgroundColor: "#fafcfb",
-  outline: "none",
-  transition: "border-color 0.18s, box-shadow 0.18s, background-color 0.18s",
-};
-
-const inputFocusStyle = {
-  borderColor: "#10b981",
-  backgroundColor: "#ffffff",
-  boxShadow: "0 0 0 3px rgba(16,185,129,0.12)",
-};
-
-const inputBlurStyle = {
-  borderColor: "#d1e9e0",
-  backgroundColor: "#fafcfb",
-  boxShadow: "none",
-};
-
-const eyeButtonStyle = {
-  position: "absolute",
-  right: "12px",
-  background: "none",
-  border: "none",
-  padding: "4px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  lineHeight: 1,
-};
-
-const primaryBtn = {
-  width: "100%",
-  border: "none",
-  borderRadius: "10px",
-  padding: "12px 16px",
-  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-  color: "#ffffff",
-  fontSize: "14.5px",
-  fontWeight: 700,
-  cursor: "pointer",
-  letterSpacing: "0.01em",
-  transition: "background-color 0.18s, opacity 0.18s",
-  marginTop: "4px",
-};
-
-const primaryBtnDisabled = {
-  opacity: 0.65,
-  cursor: "not-allowed",
-};
-
-const btnContentStyle = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "8px",
-};
-
-const dividerStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  margin: "20px 0",
-};
-
-const dividerLine = {
-  flex: 1,
-  height: "1px",
-  backgroundColor: "#e5f0ed",
-};
-
-const dividerLabel = {
-  fontSize: "12px",
-  fontWeight: 600,
-  color: "#9cafa9",
-  letterSpacing: "0.06em",
-};
-
-const googleBtn = {
-  width: "100%",
-  border: "1.5px solid #d1e9e0",
-  borderRadius: "10px",
-  padding: "11px 16px",
-  backgroundColor: "#ffffff",
-  color: "#0a1f17",
-  fontSize: "14px",
-  fontWeight: 600,
-  cursor: "pointer",
-  transition: "background-color 0.18s, border-color 0.18s",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const googleBtnDisabled = {
-  opacity: 0.55,
-  cursor: "not-allowed",
-};
-
-const footerStyle = {
-  marginTop: "20px",
-  fontSize: "13.5px",
-  color: "#6b7e78",
-  textAlign: "center",
-};
-
-const linkStyle = {
-  color: "#059669",
-  fontWeight: 700,
-  textDecoration: "none",
-};

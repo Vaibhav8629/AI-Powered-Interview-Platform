@@ -70,7 +70,7 @@ export default function CreditBadge({ credits = 0, planAllowance = 100, plan = "
         }} />
       </span>
 
-      {plan === "pro" && (
+      {(plan === "pro" || plan === "premium") && (
         <span style={{
           fontSize: 10,
           fontWeight: 800,

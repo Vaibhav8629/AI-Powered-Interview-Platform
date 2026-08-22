@@ -1,461 +1,423 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Zap,
-  Plus,
-  Clock,
-  Calendar,
-  BarChart3,
-  ListChecks,
-  Layers,
-  Gauge,
-  ChevronRight,
-  RefreshCcw,
-  Inbox,
-  AlertTriangle,
-  Sparkles,
-  ArrowRight,
+  Zap, Plus, ArrowRight, Search, Calendar, Clock, ListChecks, Layers,
+  Gauge, RefreshCcw, Inbox, AlertTriangle, Sparkles, TrendingUp,
+  Award, Target, CheckCircle2, ChevronRight, Filter, SlidersHorizontal,
 } from "lucide-react";
 
-/**
- * /interview-history
- *
- * Matches the existing InterviewAI theme: emerald/teal accents on a light,
- * airy background, pill badges, rounded-2xl cards, soft shadows, and the
- * same header/nav treatment used on the landing + setup pages.
- *
- * Auth + API conventions below follow the pattern already used elsewhere
- * in the app (Bearer token from localStorage, BASE_API from env). If your
- * project already has a shared `api` axios instance or an `useAuth()` hook,
- * swap the two spots marked with "// ADAPT:" to use those instead — nothing
- * else needs to change.
- */
+const BASE_API = import.meta.env.VITE_BASE_API || "";
 
-const BASE_API = import.meta.env.VITE_BASE_API || process.env.REACT_APP_BASE_API;
-
-const STATUS_STYLES = {
-  completed: {
-    label: "Completed",
-    dot: "bg-emerald-500",
-    badge: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-  },
-  "in-progress": {
-    label: "In Progress",
-    dot: "bg-amber-500",
-    badge: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-  },
-  created: {
-    label: "Not Started",
-    dot: "bg-slate-400",
-    badge: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
-  },
+const STATUS_META = {
+  completed: { label: "Completed", dot: "#10b981", chip: { bg: "#ecfdf5", color: "#047857", border: "#a7f3d0" } },
+  "in-progress": { label: "In progress", dot: "#f59e0b", chip: { bg: "#fffbeb", color: "#b45309", border: "#fcd34d" } },
+  created: { label: "Not started", dot: "#94a3b8", chip: { bg: "#f8fafc", color: "#64748b", border: "#e2e8f0" } },
 };
 
-function normalizeStatus(status) {
-  const s = (status || "").toLowerCase();
-  if (s.includes("complete")) return "completed";
-  if (s.includes("progress") || s.includes("start")) return "in-progress";
+function normalizeStatus(s) {
+  const v = (s || "").toLowerCase();
+  if (v.includes("complete")) return "completed";
+  if (v.includes("progress") || v.includes("start")) return "in-progress";
   return "created";
 }
 
-function formatDate(dateString) {
-  if (!dateString) return "—";
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+function formatDate(ds) {
+  if (!ds) return "—";
+  return new Date(ds).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function formatDuration(minutes) {
-  if (!minutes) return "—";
-  if (minutes < 60) return `${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
+function formatShortDate(ds) {
+  if (!ds) return "—";
+  return new Date(ds).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function computeScore(interview) {
-  if (typeof interview.overallScore === "number") return interview.overallScore;
-  const scored = (interview.questions || []).filter(
-    (q) => typeof q.score === "number"
-  );
+function formatDuration(m) {
+  if (!m) return "—";
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60), r = m % 60;
+  return r ? `${h}h ${r}m` : `${h}h`;
+}
+
+function computeScore(iv) {
+  if (typeof iv.overallScore === "number") return iv.overallScore;
+  const scored = (iv.questions || []).filter(q => typeof q.score === "number");
   if (!scored.length) return null;
-  const avg = scored.reduce((sum, q) => sum + q.score, 0) / scored.length;
-  return Math.round(avg);
+  return Math.round(scored.reduce((s, q) => s + q.score, 0) / scored.length);
 }
 
-function computeAnswered(interview) {
-  const total = (interview.questions || []).length || interview.numberOfQuestions || 0;
-  const answered = (interview.questions || []).filter(
-    (q) => q.answer && q.answer.trim().length > 0
-  ).length;
+function computeAnswered(iv) {
+  const total = (iv.questions || []).length || iv.numberOfQuestions || 0;
+  const answered = (iv.questions || []).filter(q => q.answer?.trim()).length;
   return { answered, total };
 }
 
-function scoreTone(score) {
-  if (score === null) return "text-slate-400";
-  if (score >= 80) return "text-emerald-600";
-  if (score >= 60) return "text-amber-600";
-  return "text-rose-600";
+function scoreColor(score) {
+  if (score == null) return "#cbd5e1";
+  if (score >= 80) return "#059669";
+  if (score >= 60) return "#d97706";
+  return "#dc2626";
 }
 
-/* ---------------------------- Skeleton card ---------------------------- */
+function scoreLabel(score) {
+  if (score == null) return "Not scored";
+  if (score >= 90) return "Excellent";
+  if (score >= 80) return "Strong";
+  if (score >= 70) return "Good";
+  if (score >= 60) return "Fair";
+  return "Needs work";
+}
 
-function SkeletonCard() {
+/* ─── Score Ring ──────────────────────────────────────────────────────────── */
+function ScoreRing({ score, size = 80, stroke = 7 }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, score ?? 0));
+  const offset = c - (pct / 100) * c;
+  const color = scoreColor(score);
+
   return (
-    <div className="animate-pulse rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div className="space-y-3 flex-1">
-          <div className="h-3 w-24 rounded-full bg-slate-100" />
-          <div className="h-5 w-48 rounded-full bg-slate-200" />
-          <div className="flex gap-2">
-            <div className="h-6 w-20 rounded-full bg-slate-100" />
-            <div className="h-6 w-24 rounded-full bg-slate-100" />
-            <div className="h-6 w-16 rounded-full bg-slate-100" />
-          </div>
-        </div>
-        <div className="h-12 w-12 rounded-full bg-slate-100" />
-      </div>
-      <div className="mt-6 h-px w-full bg-slate-100" />
-      <div className="mt-4 flex justify-between">
-        <div className="h-4 w-32 rounded-full bg-slate-100" />
-        <div className="h-9 w-28 rounded-full bg-slate-100" />
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="#f1f5f9" strokeWidth={stroke} fill="none" />
+        <motion.circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none"
+          strokeLinecap="round" strokeDasharray={c}
+          initial={{ strokeDashoffset: c }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 1.1, ease: "easeOut", delay: 0.1 }}
+        />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: size * 0.27, fontWeight: 800, color: score == null ? "#94a3b8" : "#0f172a", lineHeight: 1 }}>
+          {score ?? "—"}
+        </span>
+        <span style={{ fontSize: 9, color: "#94a3b8", fontWeight: 650 }}>/100</span>
       </div>
     </div>
   );
 }
 
-/* ------------------------------ Empty state ----------------------------- */
+/* ─── Stats cards ─────────────────────────────────────────────────────────── */
+function StatCard({ icon: Icon, label, value, color = "#059669", delay = 0 }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.4 }}
+      style={{ background: "#fff", border: "1px solid #f1f5f9", borderRadius: 16, padding: "20px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 2px 8px rgba(15,23,42,0.05)" }}
+    >
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: `${color}12`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Icon size={20} color={color} />
+      </div>
+      <div>
+        <div style={{ fontSize: 24, fontWeight: 850, color: "#0f172a", letterSpacing: "-0.02em", lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: 12.5, color: "#64748b", fontWeight: 550, marginTop: 3 }}>{label}</div>
+      </div>
+    </motion.div>
+  );
+}
 
-function EmptyState({ onStart }) {
+/* ─── Interview row card ──────────────────────────────────────────────────── */
+function InterviewCard({ interview, index, onAction }) {
+  const statusKey = normalizeStatus(interview.status);
+  const meta = STATUS_META[statusKey];
+  const score = computeScore(interview);
+  const { answered, total } = computeAnswered(interview);
+  const actionLabel = statusKey === "completed" ? "View report" : statusKey === "in-progress" ? "Continue" : "Start";
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="flex flex-col items-center justify-center rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/60 to-white px-8 py-20 text-center"
+      transition={{ duration: 0.35, delay: Math.min(index * 0.05, 0.3) }}
+      style={{
+        background: "#fff", border: "1px solid #f1f5f9", borderRadius: 16,
+        padding: "20px 24px", display: "flex", alignItems: "center", gap: 20,
+        transition: "all 0.2s ease", cursor: "default",
+      }}
+      whileHover={{ y: -2, boxShadow: "0 8px 28px rgba(15,23,42,0.08)", borderColor: "#e2e8f0" }}
     >
-      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100">
-        <Inbox className="h-7 w-7 text-emerald-600" />
+      {/* Score ring */}
+      {statusKey === "completed" ? (
+        <ScoreRing score={score} size={64} stroke={6} />
+      ) : statusKey === "in-progress" ? (
+        <div style={{ width: 64, height: 64, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 5 }}>
+          <div style={{ width: 48, height: 4, borderRadius: 99, background: "#f1f5f9", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${total ? (answered / total) * 100 : 0}%`, background: "#f59e0b", borderRadius: 99 }} />
+          </div>
+          <span style={{ fontSize: 10.5, color: "#94a3b8", fontWeight: 650 }}>{answered}/{total}</span>
+        </div>
+      ) : (
+        <div style={{ width: 64, height: 64, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Gauge size={28} color="#cbd5e1" />
+        </div>
+      )}
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: "#94a3b8" }}>{formatShortDate(interview.createdAt)}</span>
+          <span style={{ padding: "2px 9px", borderRadius: 99, fontSize: 11, fontWeight: 700, color: meta.chip.color, background: meta.chip.bg, border: `1px solid ${meta.chip.border}`, display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: meta.dot }} />
+            {meta.label}
+          </span>
+        </div>
+        <h3 style={{ fontSize: 15.5, fontWeight: 750, color: "#0f172a", margin: "0 0 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {interview.role || "Untitled interview"}
+        </h3>
+        <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 8px" }}>
+          {[interview.interviewType || "General", interview.difficulty].filter(Boolean).join(" · ")}
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 14, fontSize: 12, color: "#94a3b8" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><ListChecks size={11} />{total} questions</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Clock size={11} />{formatDuration(interview.duration)}</span>
+          {Array.isArray(interview.topics) && interview.topics.length > 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <Layers size={11} />
+              {interview.topics.slice(0, 2).join(", ")}{interview.topics.length > 2 ? ` +${interview.topics.length - 2}` : ""}
+            </span>
+          )}
+        </div>
       </div>
-      <h3 className="text-xl font-bold text-slate-900">No interviews yet</h3>
-      <p className="mt-2 max-w-sm text-slate-500">
-        Start your first AI interview and your interview history will appear
-        here.
-      </p>
-      <button
-        onClick={onStart}
-        className="mt-6 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-6 py-3 font-semibold text-white shadow-sm shadow-emerald-200 transition hover:bg-emerald-700 active:scale-[0.98]"
-      >
-        Start interview
-        <ArrowRight className="h-4 w-4" />
-      </button>
+
+      {/* Score label + action */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10, flexShrink: 0 }}>
+        {statusKey === "completed" && score != null && (
+          <span style={{ fontSize: 12, fontWeight: 700, color: scoreColor(score) }}>{scoreLabel(score)}</span>
+        )}
+        <button type="button" onClick={() => onAction(interview, statusKey)}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            padding: statusKey === "completed" ? "7px 14px" : "7px 14px",
+            borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all 0.15s",
+            background: statusKey === "completed" ? "#f0fdf4" : "linear-gradient(135deg, #047857, #10b981)",
+            color: statusKey === "completed" ? "#047857" : "#fff",
+            border: statusKey === "completed" ? "1px solid #a7f3d0" : "none",
+            boxShadow: statusKey !== "completed" ? "0 2px 8px rgba(5,150,105,0.25)" : "none",
+          }}
+        >
+          {actionLabel} <ChevronRight size={14} />
+        </button>
+      </div>
     </motion.div>
   );
 }
 
-/* ------------------------------ Error state ----------------------------- */
-
-function ErrorState({ message, onRetry }) {
+/* ─── Empty state ─────────────────────────────────────────────────────────── */
+function EmptyState({ filtered, onStart }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-3xl border border-rose-100 bg-rose-50/50 px-8 py-16 text-center">
-      <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100">
-        <AlertTriangle className="h-6 w-6 text-rose-600" />
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "60px 24px" }}>
+      <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#f0fdf4", border: "2px dashed #a7f3d0", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+        <Sparkles size={32} color="#10b981" />
       </div>
-      <h3 className="text-lg font-bold text-slate-900">
-        Couldn't load your interviews
+      <h3 style={{ fontSize: 20, fontWeight: 750, color: "#0f172a", margin: "0 0 10px" }}>
+        {filtered ? "No sessions match your filters" : "No sessions logged yet"}
       </h3>
-      <p className="mt-2 max-w-sm text-slate-500">
-        {message || "Something went wrong while fetching your interview history."}
+      <p style={{ fontSize: 15, color: "#64748b", margin: "0 0 28px", maxWidth: 360, lineHeight: 1.7 }}>
+        {filtered ? "Try adjusting your search or filter settings." : "Run your first AI interview and it'll appear here — scored, timed, and ready to revisit."}
       </p>
-      <button
-        onClick={onRetry}
-        className="mt-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 font-semibold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-700"
-      >
-        <RefreshCcw className="h-4 w-4" />
-        Try again
-      </button>
+      {!filtered && (
+        <button type="button" onClick={onStart}
+          style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 24px", background: "linear-gradient(135deg, #047857, #10b981)", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 750, color: "#fff", cursor: "pointer", boxShadow: "0 6px 20px rgba(5,150,105,0.28)" }}
+        >
+          Start your first session <ArrowRight size={16} />
+        </button>
+      )}
     </div>
   );
 }
 
-/* ------------------------------ Stat pill ------------------------------- */
-
-function StatPill({ icon: Icon, label }) {
+/* ─── Loading skeleton ────────────────────────────────────────────────────── */
+function LoadingSkeleton() {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 ring-1 ring-slate-100">
-      <Icon className="h-3.5 w-3.5 text-slate-400" />
-      {label}
-    </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {[...Array(4)].map((_, i) => (
+        <div key={i} style={{ height: 100, borderRadius: 16, background: "linear-gradient(90deg, #f8fafc 25%, #f1f5f9 50%, #f8fafc 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s ease infinite" }} />
+      ))}
+    </div>
   );
 }
 
-/* --------------------------- Interview card ----------------------------- */
-
-function InterviewCard({ interview, index, onAction }) {
-  const statusKey = normalizeStatus(interview.status);
-  const statusMeta = STATUS_STYLES[statusKey];
-  const score = computeScore(interview);
-  const { answered, total } = computeAnswered(interview);
-
-  const actionLabel =
-    statusKey === "completed"
-      ? "View result"
-      : statusKey === "in-progress"
-      ? "Continue interview"
-      : "Start interview";
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.05 }}
-      className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-100/60"
-    >
-      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-emerald-50 opacity-0 blur-2xl transition group-hover:opacity-100" />
-
-      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${statusMeta.badge}`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
-              {statusMeta.label}
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-100">
-              <Calendar className="h-3 w-3" />
-              {formatDate(interview.createdAt)}
-            </span>
-          </div>
-
-          <h3 className="mt-3 truncate text-lg font-bold text-slate-900">
-            {interview.role || "Untitled interview"}
-          </h3>
-          <p className="mt-0.5 text-sm text-slate-500">
-            {interview.experience ? `${interview.experience} · ` : ""}
-            {interview.interviewType || "General"}
-          </p>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <StatPill icon={Gauge} label={interview.difficulty || "Standard"} />
-            <StatPill
-              icon={ListChecks}
-              label={`${total} question${total === 1 ? "" : "s"}`}
-            />
-            <StatPill icon={Clock} label={formatDuration(interview.duration)} />
-            {Array.isArray(interview.topics) && interview.topics.length > 0 && (
-              <StatPill
-                icon={Layers}
-                label={
-                  interview.topics.length > 2
-                    ? `${interview.topics.slice(0, 2).join(", ")} +${
-                        interview.topics.length - 2
-                      }`
-                    : interview.topics.join(", ")
-                }
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="flex shrink-0 flex-col items-start gap-4 sm:items-end">
-          {statusKey === "completed" && score !== null ? (
-            <div className="text-right">
-              <div className={`text-3xl font-extrabold leading-none ${scoreTone(score)}`}>
-                {score}
-                <span className="text-base font-semibold text-slate-300">/100</span>
-              </div>
-              <div className="mt-1 text-xs text-slate-400">Overall score</div>
-            </div>
-          ) : statusKey === "in-progress" ? (
-            <div className="w-32 text-right">
-              <div className="mb-1 text-xs font-medium text-slate-500">
-                {answered}/{total} answered
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-amber-500 transition-all"
-                  style={{
-                    width: `${total ? (answered / total) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-sm text-slate-400">
-              <BarChart3 className="h-4 w-4" />
-              Not started
-            </div>
-          )}
-
-          <button
-            onClick={() => onAction(interview, statusKey)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold shadow-sm transition active:scale-[0.97] ${
-              statusKey === "completed"
-                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
-                : "bg-emerald-600 text-white hover:bg-emerald-700"
-            }`}
-          >
-            {actionLabel}
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-/* --------------------------------- Page ---------------------------------- */
-
+/* ─── Page ────────────────────────────────────────────────────────────────── */
 export default function InterviewHistory() {
   const navigate = useNavigate();
   const [interviews, setInterviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
 
   const fetchInterviews = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      // ADAPT: replace with your shared API utility if one exists,
-      // e.g. `const { data } = await api.get("/interviews/my-interviews")`
       const token = localStorage.getItem("token");
-      const res = await fetch(`${BASE_API}/api/my-interviews`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (res.status === 401 || res.status === 403) {
-        setError("Your session has expired. Please log in again.");
-        setLoading(false);
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error(`Request failed with status ${res.status}`);
-      }
-
+      const res = await fetch(`${BASE_API}/api/my-interviews`, { headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } });
+      if (res.status === 401 || res.status === 403) { setError("Your session has expired. Please log in again."); return; }
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       const data = await res.json();
-      const list = Array.isArray(data) ? data : data.interviews || [];
-      setInterviews(list);
-    } catch (err) {
-      setError(err.message || "Unable to fetch interview history.");
-    } finally {
-      setLoading(false);
-    }
+      setInterviews(Array.isArray(data) ? data : data.interviews || []);
+    } catch (err) { setError(err.message || "Unable to fetch interview history."); }
+    finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchInterviews();
-  }, [fetchInterviews]);
+  useEffect(() => { fetchInterviews(); }, [fetchInterviews]);
 
-  const handleStartNew = () => navigate("/interview-setup");
+  // Fix: use the correct route
+  const handleStartNew = () => navigate("/interview/setup");
 
   const handleAction = (interview, statusKey) => {
-    if (statusKey === "completed") {
-      navigate(`/feedback/${interview._id}`);
-    } else if (statusKey === "in-progress") {
-      navigate(`/interview/${interview._id}`);
-    } else {
-      navigate(`/interview/${interview._id}`);
-    }
+    if (statusKey === "completed") navigate(`/feedback/${interview._id}`);
+    else navigate(`/interview/${interview._id}`);
   };
 
-  return (
-    <div className="min-h-screen bg-white">
-      {/* Ambient background matching landing page */}
-      <div className="pointer-events-none fixed inset-0 -z-10 bg-gradient-to-b from-emerald-50/60 via-white to-white" />
+  const metrics = useMemo(() => {
+    const total = interviews.length;
+    const completed = interviews.filter(i => normalizeStatus(i.status) === "completed");
+    const scores = completed.map(computeScore).filter(s => typeof s === "number");
+    const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+    const bestScore = scores.length ? Math.max(...scores) : null;
+    const answered = interviews.reduce((acc, iv) => acc + computeAnswered(iv).answered, 0);
+    return { total, completedCount: completed.length, avgScore, bestScore, questionsAnswered: answered };
+  }, [interviews]);
 
-      {/* Top nav — same treatment as landing/setup pages */}
-      <header className="sticky top-0 z-20 border-b border-slate-100 bg-white/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500">
-              <Zap className="h-4 w-4 text-white" fill="white" />
+  const filteredList = useMemo(() => {
+    let list = [...interviews];
+    if (statusFilter !== "all") list = list.filter(i => normalizeStatus(i.status) === statusFilter);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(i =>
+        (i.role || "").toLowerCase().includes(q) ||
+        (i.interviewType || "").toLowerCase().includes(q) ||
+        (Array.isArray(i.topics) && i.topics.some(t => t.toLowerCase().includes(q)))
+      );
+    }
+    if (sortBy === "oldest") list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    else if (sortBy === "score") list.sort((a, b) => (computeScore(b) ?? -1) - (computeScore(a) ?? -1));
+    else list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return list;
+  }, [interviews, statusFilter, search, sortBy]);
+
+  const isFiltered = search.trim() || statusFilter !== "all";
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
+      {/* Header */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #f1f5f9", padding: "0 24px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
+          <button type="button" onClick={() => navigate("/")} style={{ display: "flex", alignItems: "center", gap: 9, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, background: "linear-gradient(135deg, #047857, #10b981)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Zap size={16} color="#fff" />
             </div>
-            <span className="text-lg font-extrabold text-slate-900">
-              InterviewAI
-            </span>
-          </div>
-          <button
-            onClick={handleStartNew}
-            className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98]"
+            <span style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em" }}>InterviewAI</span>
+          </button>
+          <button type="button" onClick={handleStartNew}
+            style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 18px", background: "linear-gradient(135deg, #047857, #10b981)", border: "none", borderRadius: 9, fontSize: 14, fontWeight: 750, color: "#fff", cursor: "pointer", boxShadow: "0 4px 14px rgba(5,150,105,0.25)" }}
           >
-            <Plus className="h-4 w-4" />
-            Start new interview
+            <Plus size={16} /> New session
           </button>
         </div>
-      </header>
+      </div>
 
-      <main className="mx-auto max-w-6xl px-6 py-12">
-        {/* Page header */}
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="mb-10"
-        >
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
-            <Sparkles className="h-3.5 w-3.5" />
-            Your progress
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px 80px" }}>
+        {/* Page title + stats */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} style={{ marginBottom: 36 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#059669", textTransform: "uppercase", letterSpacing: "0.1em" }}>Session log</span>
           </div>
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-                Interview History
-              </h1>
-              <p className="mt-2 max-w-xl text-slate-500">
-                Review your previous interviews, performance, scores, and
-                feedback.
-              </p>
-            </div>
-            <button
-              onClick={handleStartNew}
-              className="hidden items-center gap-2 self-start rounded-full bg-emerald-600 px-5 py-2.5 font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98] sm:inline-flex"
-            >
-              Start new interview
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
+          <h1 style={{ fontSize: "clamp(26px, 3vw, 38px)", fontWeight: 900, color: "#0f172a", letterSpacing: "-0.025em", margin: "0 0 6px" }}>Interview history</h1>
+          <p style={{ fontSize: 15, color: "#64748b", margin: 0 }}>
+            {metrics.total > 0 ? `${metrics.total} session${metrics.total !== 1 ? "s" : ""} recorded` : "Your practice sessions will appear here"}
+          </p>
         </motion.div>
 
-        {/* Content */}
-        {loading ? (
-          <div className="grid grid-cols-1 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <SkeletonCard key={i} />
+        {/* Stats */}
+        {metrics.total > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 32 }} className="history-stats-grid">
+            <StatCard icon={ListChecks} label="Total sessions" value={metrics.total} color="#059669" delay={0} />
+            <StatCard icon={CheckCircle2} label="Completed" value={metrics.completedCount} color="#3b82f6" delay={0.06} />
+            <StatCard icon={Award} label="Best score" value={metrics.bestScore ?? "—"} color="#7c3aed" delay={0.12} />
+            <StatCard icon={Target} label="Avg score" value={metrics.avgScore ?? "—"} color="#f59e0b" delay={0.18} />
+          </div>
+        )}
+
+        {/* Filter bar */}
+        <div style={{ background: "#fff", border: "1px solid #f1f5f9", borderRadius: 14, padding: "16px 20px", marginBottom: 20, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+          {/* Search */}
+          <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
+            <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search role, type, topic…"
+              style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px 9px 36px", border: "1.5px solid #e2e8f0", borderRadius: 9, fontSize: 14, color: "#0f172a", background: "#f8fafc", outline: "none", transition: "all 0.15s" }}
+              onFocus={e => { e.target.style.borderColor = "#10b981"; e.target.style.boxShadow = "0 0 0 3px rgba(16,185,129,0.08)"; }}
+              onBlur={e => { e.target.style.borderColor = "#e2e8f0"; e.target.style.boxShadow = "none"; }}
+            />
+          </div>
+
+          {/* Status pills */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {[{ k: "all", l: "All" }, { k: "completed", l: "Completed" }, { k: "in-progress", l: "In progress" }, { k: "created", l: "Not started" }].map(f => (
+              <button key={f.k} type="button" onClick={() => setStatusFilter(f.k)}
+                style={{ padding: "7px 14px", borderRadius: 9, fontSize: 13, fontWeight: 650, cursor: "pointer", transition: "all 0.15s", border: "none",
+                  background: statusFilter === f.k ? "#0f172a" : "#f1f5f9",
+                  color: statusFilter === f.k ? "#fff" : "#64748b" }}
+              >{f.l}</button>
             ))}
           </div>
+
+          {/* Sort */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+            <SlidersHorizontal size={14} color="#94a3b8" />
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+              style={{ padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 9, fontSize: 13, color: "#374151", background: "#fff", outline: "none", cursor: "pointer" }}
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="score">Highest score</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Main content */}
+        {loading ? (
+          <LoadingSkeleton />
         ) : error ? (
-          <ErrorState message={error} onRetry={fetchInterviews} />
-        ) : interviews.length === 0 ? (
-          <EmptyState onStart={handleStartNew} />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "60px 24px", background: "#fff", borderRadius: 16 }}>
+            <div style={{ width: 60, height: 60, borderRadius: 16, background: "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+              <AlertTriangle size={28} color="#dc2626" />
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 750, color: "#0f172a", margin: "0 0 8px" }}>Couldn't load sessions</h3>
+            <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 24px" }}>{error}</p>
+            <button type="button" onClick={fetchInterviews}
+              style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 9, fontSize: 14, fontWeight: 650, cursor: "pointer" }}
+            >
+              <RefreshCcw size={15} /> Try again
+            </button>
+          </div>
+        ) : filteredList.length === 0 ? (
+          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #f1f5f9" }}>
+            <EmptyState filtered={isFiltered} onStart={handleStartNew} />
+          </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4">
-            <AnimatePresence>
-              {interviews
-                .slice()
-                .sort(
-                  (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-                )
-                .map((interview, i) => (
-                  <InterviewCard
-                    key={interview._id}
-                    interview={interview}
-                    index={i}
-                    onAction={handleAction}
-                  />
-                ))}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 650, color: "#94a3b8", marginBottom: 4 }}>
+              {filteredList.length} session{filteredList.length !== 1 ? "s" : ""}
+              {isFiltered ? " matched" : ""}
+            </div>
+            <AnimatePresence mode="popLayout">
+              {filteredList.map((iv, i) => (
+                <InterviewCard key={iv._id} interview={iv} index={i} onAction={handleAction} />
+              ))}
             </AnimatePresence>
           </div>
         )}
-      </main>
+      </div>
+
+      <style>{`
+        @keyframes shimmer { to { background-position: 200% center; } }
+        @media (max-width: 768px) {
+          .history-stats-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+        @media (max-width: 480px) {
+          .history-stats-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }
